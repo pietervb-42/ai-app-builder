@@ -1,21 +1,32 @@
 {
   "name": "ai-app-builder",
   "version": "1.0.0",
-  "description": "",
+  "description": "Local AI App Builder built on top of the OpenAI API",
   "main": "index.js",
+  "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node index.js",
+    "dev": "node index.js"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/pietervb-42/ai-app-builder.git"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "ai",
+    "openai",
+    "app-builder",
+    "agent",
+    "automation"
+  ],
+  "author": "Pieter von Benecke",
   "license": "ISC",
-  "type": "commonjs",
   "bugs": {
     "url": "https://github.com/pietervb-42/ai-app-builder/issues"
   },
-  "homepage": "https://github.com/pietervb-42/ai-app-builder#readme"
+  "homepage": "https://github.com/pietervb-42/ai-app-builder#readme",
+  "dependencies": {
+    "dotenv": "^17.2.3",
+    "openai": "^6.15.0"
+  }
 }
