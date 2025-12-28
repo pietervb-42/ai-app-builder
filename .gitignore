@@ -1,5 +1,42 @@
-node_modules
+# =====================
+# Dependencies
+# =====================
+node_modules/
+
+# =====================
+# Environment variables
+# =====================
 .env
-.env
-.env.supabase.local
-.env*.local
+.env.*
+!.env.example
+
+# =====================
+# AI App Builder outputs
+# =====================
+outputs/
+output/
+reports/
+demo-app/
+demo-app-2/
+
+# =====================
+# Generated apps / DBs
+# =====================
+user-api-v1/db/
+user-api-v1/node_modules/
+
+# =====================
+# Logs & backups
+# =====================
+*.log
+rollback_test.log
+*.bak
+*.bak_*
+
+# =====================
+# OS / Editor junk
+# =====================
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/settings.json
