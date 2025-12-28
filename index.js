@@ -75,9 +75,13 @@ ai-app-builder CLI
 
 Commands:
   templates:list
+
   generate --template <name> --out <path>
+  generate --from-plan <plan.json> [--out <path>] [--template <name>]
 
   plan --prompt "<text>" [--out <file>] [--json] [--quiet]
+
+  build --prompt "<text>" [--out <path>] [--template <name>] [--install-mode <always|never|if-missing>] [--json] [--quiet]
 
   validate --app <path> [--quiet] [--json] [--no-install] [--install-mode <always|never|if-missing>] [--out <file>] [--profile <name>]
   validate:all --root <path> [--quiet] [--json] [--no-install] [--install-mode <always|never|if-missing>] [--out <file>] [--profile <name>] [--progress] [--max <n>] [--include <text>]
@@ -89,7 +93,11 @@ Commands:
   regen:apply --app <path> --yes [--overwriteModified]
 
 Flags:
-  --prompt <text>   Required for plan. Goal/requirements statement.
+  --from-plan <file>  Generate using a plan JSON artifact (Step 14 handshake)
+  --template <name>   Template name (explicit override)
+  --out <path>        Output folder path (if omitted with --from-plan, defaults deterministically)
+
+  --prompt <text>   Required for plan/build. Goal/requirements statement.
   --quiet          Suppress npm install/start output (CI friendly)
   --json           Print ONLY the final JSON result (one line)
   --no-install     Skip npm install (CI already installed deps)
@@ -124,6 +132,46 @@ async function main() {
     }
 
     if (cmd === "generate") {
+      const fromPlan = flags["from-plan"] ? String(flags["from-plan"]) : "";
+
+      // Step 14 path: generate from plan artifact
+      if (fromPlan) {
+        const planMod = await import("./src/plan-handoff.js");
+        const loadFn = pickExport(planMod, ["loadPlanFromFile"], "./src/plan-handoff.js");
+        const selectFn = pickExport(planMod, ["selectTemplateFromPlan"], "./src/plan-handoff.js");
+        const defaultOutFn = pickExport(planMod, ["defaultOutPathFromPlan"], "./src/plan-handoff.js");
+
+        const { plan } = loadFn(fromPlan);
+
+        // Template selection
+        const explicitTemplate = flags.template ? String(flags.template) : "";
+        let template = explicitTemplate;
+
+        let notes = [];
+        if (!template) {
+          const selected = selectFn(plan);
+          template = selected.template;
+          notes = Array.isArray(selected.notes) ? selected.notes : [];
+        }
+
+        // Out path selection
+        const out = flags.out ? String(flags.out) : "";
+        const outPath = out ? out : defaultOutFn(plan);
+
+        // Call existing generate implementation (unchanged)
+        const mod = await import("./src/generate.js");
+        const fn = pickExport(mod, ["generateApp", "generate"], "./src/generate.js");
+        await fn({ template, outPath });
+
+        // Optional deterministic note output (stderr) so it never pollutes JSON outputs elsewhere
+        if (notes.length) {
+          for (const n of notes) process.stderr.write(`[plan->generate] ${n}\n`);
+        }
+
+        return;
+      }
+
+      // Legacy path: explicit template + out required
       const template = requireFlag(flags, "template");
       const out = requireFlag(flags, "out");
 
@@ -164,6 +212,14 @@ async function main() {
       return;
     }
 
+    // Step 15: build (single pipeline)
+    if (cmd === "build") {
+      const mod = await import("./src/build.js");
+      const fn = pickExport(mod, ["buildCommand"], "./src/build.js");
+      const code = await fn({ flags });
+      process.exit(code);
+    }
+
     if (cmd === "validate") {
       const app = requireFlag(flags, "app");
       const json = hasFlag(flags, "json");
@@ -172,7 +228,6 @@ async function main() {
       const out = flags.out;
       const profile = flags.profile;
 
-      // ✅ install-mode comes from parsed flags (no raw argv scanning)
       const installMode = normalizeInstallMode(flags["install-mode"]);
 
       const mod = await import("./src/validate.js");
@@ -202,7 +257,6 @@ async function main() {
       const max = flags.max ? Number(flags.max) : undefined;
       const include = flags.include ? String(flags.include) : undefined;
 
-      // ✅ install-mode comes from parsed flags
       const installMode = normalizeInstallMode(flags["install-mode"]);
 
       const mod = await import("./src/validate-all.js");
@@ -238,7 +292,7 @@ async function main() {
       const app = requireFlag(flags, "app");
       const yes = hasFlag(flags, "yes");
       const templateDir = requireFlag(flags, "templateDir");
-      const template = flags.template; // optional
+      const template = flags.template;
 
       const mod = await import("./src/manifest.js");
       const fn = pickExport(mod, ["manifestInit"], "./src/manifest.js");
