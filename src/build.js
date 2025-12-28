@@ -1,6 +1,5 @@
 // src/build.js
 import fs from "fs";
-import path from "path";
 
 import { createPlan } from "./plan.js";
 import { resolveFromPlanObject } from "./plan-handoff.js";
@@ -8,14 +7,21 @@ import { generateApp } from "./generate.js";
 import { validateAppRun } from "./validate.js";
 
 /**
- * Step 15: build
+ * Step 15/16: build
+ *
  * node index.js build --prompt "<text>" [--out <path>] [--template <name>]
- *                     [--install-mode <always|never|if-missing>] [--json] [--quiet]
+ *                     [--install-mode <always|never|if-missing>] [--dry-run]
+ *                     [--json] [--quiet]
  *
  * Guarantees:
- * - Single JSON output in --json mode
+ * - build --json prints ONLY one JSON object line
  * - No overwrite of existing folders
  * - Deterministic suffixing if output exists
+ *
+ * Step 16: --dry-run
+ * - PLAN + resolve template/outPath (+ suffix) only
+ * - NO filesystem writes
+ * - NO generate / manifest / validate
  */
 
 function safeString(x) {
@@ -47,6 +53,8 @@ function fail(stage, code, message, extra = {}) {
  *   path_2
  *   path_3
  *   ...
+ *
+ * Note: uses fs.existsSync only; no writes.
  */
 function resolveUniqueOutPath(basePath) {
   if (!fs.existsSync(basePath)) return basePath;
@@ -61,6 +69,7 @@ function resolveUniqueOutPath(basePath) {
 
 /**
  * Mute ALL output during pipeline when --json is enabled.
+ * This guarantees build --json emits only the final JSON line.
  */
 async function withMutedOutput(enabled, fn) {
   if (!enabled) return await fn();
@@ -99,12 +108,23 @@ async function withMutedOutput(enabled, fn) {
   }
 }
 
+function computeWillInstallAssumingFresh({ installMode }) {
+  // In a dry-run (no app generated yet), we cannot inspect node_modules.
+  // Deterministic assumption: fresh output -> node_modules missing.
+  if (installMode === "always") return true;
+  if (installMode === "never") return false;
+  // if-missing + fresh output => install would happen
+  return true;
+}
+
 export async function buildCommand({ flags }) {
   const prompt = safeString(flags.prompt).trim();
   const out = flags.out;
   const templateOverride = flags.template;
+
   const json = !!flags.json;
   const quiet = !!flags.quiet;
+  const dryRun = !!flags["dry-run"] || !!flags.dryRun;
 
   const installMode = normalizeInstallMode(flags["install-mode"] ?? flags.installMode);
 
@@ -118,13 +138,14 @@ export async function buildCommand({ flags }) {
     const result = fail(
       "input",
       "ERR_BAD_INSTALL_MODE",
-      "Invalid --install-mode. Use always|never|if-missing."
+      "Invalid --install-mode. Use always|never|if-missing.",
+      { provided: safeString(flags["install-mode"] ?? flags.installMode) }
     );
     process.stdout.write(JSON.stringify(result) + "\n");
     return 1;
   }
 
-  // 1) PLAN
+  // 1) PLAN (no I/O)
   const plan = createPlan(prompt);
   if (!plan?.ok) {
     const result = fail("plan", "ERR_PLAN_FAILED", "PLAN did not return ok:true.", { plan });
@@ -132,7 +153,7 @@ export async function buildCommand({ flags }) {
     return 1;
   }
 
-  // 2) Resolve template + base outPath
+  // 2) Resolve template + base outPath (Step 14 rules)
   const resolved = resolveFromPlanObject(plan, {
     out,
     templateOverride,
@@ -151,15 +172,42 @@ export async function buildCommand({ flags }) {
 
   const template = resolved.template;
   const baseOutPath = resolved.outPath;
-  const finalOutPath = resolveUniqueOutPath(baseOutPath);
 
+  // Deterministic safe output selection (no overwrite)
+  const outPath = resolveUniqueOutPath(baseOutPath);
+  const willCreate = !fs.existsSync(outPath);
+
+  // Step 16: DRY RUN (no writes, no validate)
+  if (dryRun) {
+    const result = {
+      ok: true,
+      dryRun: true,
+      plan,
+      template,
+      outPath,
+      willCreate,
+      installMode,
+      willInstallAssumingFresh: computeWillInstallAssumingFresh({ installMode }),
+      notes: [
+        "Dry-run only: no files were written.",
+        "No generate/manifest/validate executed.",
+        "outPath includes deterministic suffixing to avoid overwrites.",
+      ],
+    };
+
+    // Always write single JSON line for CI stability
+    process.stdout.write(JSON.stringify(result) + "\n");
+    return 0;
+  }
+
+  // Step 15 pipeline: generate + validate
   let validationResult = null;
   let valExit = 1;
 
   const pipeline = async () => {
     const generatedAbs = await generateApp({
       template,
-      outPath: finalOutPath,
+      outPath,
     });
 
     const { result, exitCode } = await validateAppRun({
@@ -173,6 +221,7 @@ export async function buildCommand({ flags }) {
   };
 
   try {
+    // mute internal logs in --json mode so we output only final JSON
     await withMutedOutput(json === true, pipeline);
   } catch (e) {
     const result = {
@@ -180,7 +229,7 @@ export async function buildCommand({ flags }) {
       stage: "generate",
       plan,
       template,
-      outPath: finalOutPath,
+      outPath,
       error: {
         code: "ERR_BUILD_FAILED",
         message: String(e?.message ?? e),
@@ -196,10 +245,20 @@ export async function buildCommand({ flags }) {
     ok: valExit === 0,
     plan,
     template,
-    outPath: finalOutPath,
+    outPath,
     validation: validationResult,
   };
 
   process.stdout.write(JSON.stringify(final) + "\n");
+
+  if (!json && !quiet) {
+    // Optional human hint to stderr (doesn't break JSON redirection)
+    process.stderr.write(
+      final.ok
+        ? `[build] OK -> ${outPath}\n`
+        : `[build] FAIL -> ${outPath}\n`
+    );
+  }
+
   return final.ok ? 0 : 1;
 }

@@ -53,7 +53,7 @@ function normalizeInstallMode(v) {
   if (!v || v === true) return undefined;
   const s = String(v).toLowerCase().trim();
   if (s === "always" || s === "never" || s === "if-missing") return s;
-  // invalid value -> ignore (validator will default deterministically)
+  // invalid value -> ignore (validator/build will default deterministically)
   return undefined;
 }
 
@@ -76,15 +76,20 @@ ai-app-builder CLI
 Commands:
   templates:list
 
+  plan --prompt "<text>" [--out <file>] [--json] [--quiet]
+
   generate --template <name> --out <path>
   generate --from-plan <plan.json> [--out <path>] [--template <name>]
 
-  plan --prompt "<text>" [--out <file>] [--json] [--quiet]
+  build --prompt "<text>" [--out <path>] [--template <name>]
+        [--install-mode <always|never|if-missing>] [--dry-run] [--json] [--quiet]
 
-  build --prompt "<text>" [--out <path>] [--template <name>] [--install-mode <always|never|if-missing>] [--json] [--quiet]
+  validate --app <path> [--quiet] [--json] [--no-install]
+           [--install-mode <always|never|if-missing>] [--out <file>] [--profile <name>]
 
-  validate --app <path> [--quiet] [--json] [--no-install] [--install-mode <always|never|if-missing>] [--out <file>] [--profile <name>]
-  validate:all --root <path> [--quiet] [--json] [--no-install] [--install-mode <always|never|if-missing>] [--out <file>] [--profile <name>] [--progress] [--max <n>] [--include <text>]
+  validate:all --root <path> [--quiet] [--json] [--no-install]
+               [--install-mode <always|never|if-missing>] [--out <file>] [--profile <name>]
+               [--progress] [--max <n>] [--include <text>]
 
   manifest:refresh --app <path> [--apply] [--templateDir <path>]
   manifest:init --app <path> --yes --templateDir <path> [--template <name>]
@@ -93,20 +98,20 @@ Commands:
   regen:apply --app <path> --yes [--overwriteModified]
 
 Flags:
-  --from-plan <file>  Generate using a plan JSON artifact (Step 14 handshake)
-  --template <name>   Template name (explicit override)
-  --out <path>        Output folder path (if omitted with --from-plan, defaults deterministically)
+  --from-plan <file>   Generate using a plan JSON artifact (Step 14 handshake)
+  --template <name>    Template name (explicit override)
+  --out <path>         Output folder path (or plan file output for plan)
 
-  --prompt <text>   Required for plan/build. Goal/requirements statement.
-  --quiet          Suppress npm install/start output (CI friendly)
-  --json           Print ONLY the final JSON result (one line)
-  --no-install     Skip npm install (CI already installed deps)
-  --install-mode   Install behavior: always|never|if-missing
-  --out <file>     Write JSON result to a file (CI artifact)
-  --profile <n>    Override validation profile selection
-  --progress       Print progress lines to stderr (keeps JSON clean)
-  --max <n>         Limit number of apps validated (debug)
-  --include <text>  Only validate app paths containing this substring
+  --prompt <text>      Required for plan/build. Goal/requirements statement.
+  --dry-run            Build: plan + resolve only; no writes; no validate.
+  --quiet              Suppress npm install/start output (CI friendly where supported)
+  --json               Print ONLY the final JSON result (one line)
+  --no-install         Skip npm install (legacy; validate/validate:all)
+  --install-mode       Install behavior: always|never|if-missing
+  --profile <n>        Override validation profile selection
+  --progress           Print progress lines to stderr (keeps JSON clean)
+  --max <n>            Limit number of apps validated (debug)
+  --include <text>     Only validate app paths containing this substring
 `.trim()
   );
 }
@@ -128,6 +133,39 @@ async function main() {
         "./src/templates.js"
       );
       await fn();
+      return;
+    }
+
+    if (cmd === "plan") {
+      const prompt = requireFlag(flags, "prompt");
+      const json = hasFlag(flags, "json");
+      const quiet = hasFlag(flags, "quiet");
+      const out = flags.out;
+
+      const mod = await import("./src/plan.js");
+      const fn = pickExport(mod, ["createPlan"], "./src/plan.js");
+
+      const plan = fn(prompt);
+
+      if (out) {
+        const resolved = path.isAbsolute(out)
+          ? out
+          : path.resolve(process.cwd(), String(out));
+        writeJsonFile(resolved, plan);
+      }
+
+      if (json || quiet) {
+        process.stdout.write(JSON.stringify(plan) + "\n");
+      } else {
+        process.stdout.write("=== PLAN MODE ===\n");
+        process.stdout.write(`Goal: ${plan.goal}\n\n`);
+        process.stdout.write("Steps:\n");
+        for (const s of plan.steps) {
+          process.stdout.write(`- ${s.id}: ${s.title}\n`);
+        }
+        process.stdout.write("\nTip: use --json for CI-stable output.\n");
+      }
+
       return;
     }
 
@@ -158,12 +196,12 @@ async function main() {
         const out = flags.out ? String(flags.out) : "";
         const outPath = out ? out : defaultOutFn(plan);
 
-        // Call existing generate implementation (unchanged)
+        // Call existing generate implementation
         const mod = await import("./src/generate.js");
         const fn = pickExport(mod, ["generateApp", "generate"], "./src/generate.js");
         await fn({ template, outPath });
 
-        // Optional deterministic note output (stderr) so it never pollutes JSON outputs elsewhere
+        // Optional deterministic note output to stderr only
         if (notes.length) {
           for (const n of notes) process.stderr.write(`[plan->generate] ${n}\n`);
         }
@@ -181,43 +219,11 @@ async function main() {
       return;
     }
 
-    if (cmd === "plan") {
-      const prompt = requireFlag(flags, "prompt");
-      const json = hasFlag(flags, "json");
-      const quiet = hasFlag(flags, "quiet");
-      const out = flags.out;
-
-      const mod = await import("./src/plan.js");
-      const fn = pickExport(mod, ["createPlan"], "./src/plan.js");
-
-      const plan = fn(prompt);
-
-      if (out) {
-        const resolved = path.isAbsolute(out) ? out : path.resolve(process.cwd(), String(out));
-        writeJsonFile(resolved, plan);
-      }
-
-      if (json || quiet) {
-        process.stdout.write(JSON.stringify(plan) + "\n");
-      } else {
-        process.stdout.write("=== PLAN MODE ===\n");
-        process.stdout.write(`Goal: ${plan.goal}\n\n`);
-        process.stdout.write("Steps:\n");
-        for (const s of plan.steps) {
-          process.stdout.write(`- ${s.id}: ${s.title}\n`);
-        }
-        process.stdout.write("\nTip: use --json for CI-stable output.\n");
-      }
-
-      return;
-    }
-
-    // Step 15: build (single pipeline)
     if (cmd === "build") {
       const mod = await import("./src/build.js");
       const fn = pickExport(mod, ["buildCommand"], "./src/build.js");
-      const code = await fn({ flags });
-      process.exit(code);
+      const exitCode = await fn({ flags });
+      process.exit(exitCode);
     }
 
     if (cmd === "validate") {
