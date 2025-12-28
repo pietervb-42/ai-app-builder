@@ -1,5 +1,7 @@
 ﻿#!/usr/bin/env node
 import process from "process";
+import fs from "fs";
+import path from "path";
 
 function parseArgs(argv) {
   const args = argv.slice(2);
@@ -55,6 +57,17 @@ function normalizeInstallMode(v) {
   return undefined;
 }
 
+function ensureDirForFile(filePath) {
+  const dir = path.dirname(filePath);
+  fs.mkdirSync(dir, { recursive: true });
+}
+
+function writeJsonFile(filePath, obj) {
+  ensureDirForFile(filePath);
+  const json = JSON.stringify(obj, null, 2) + "\n";
+  fs.writeFileSync(filePath, json, "utf8");
+}
+
 function printUsage() {
   console.log(
     `
@@ -63,6 +76,8 @@ ai-app-builder CLI
 Commands:
   templates:list
   generate --template <name> --out <path>
+
+  plan --prompt "<text>" [--out <file>] [--json] [--quiet]
 
   validate --app <path> [--quiet] [--json] [--no-install] [--install-mode <always|never|if-missing>] [--out <file>] [--profile <name>]
   validate:all --root <path> [--quiet] [--json] [--no-install] [--install-mode <always|never|if-missing>] [--out <file>] [--profile <name>] [--progress] [--max <n>] [--include <text>]
@@ -74,6 +89,7 @@ Commands:
   regen:apply --app <path> --yes [--overwriteModified]
 
 Flags:
+  --prompt <text>   Required for plan. Goal/requirements statement.
   --quiet          Suppress npm install/start output (CI friendly)
   --json           Print ONLY the final JSON result (one line)
   --no-install     Skip npm install (CI already installed deps)
@@ -117,6 +133,37 @@ async function main() {
       return;
     }
 
+    if (cmd === "plan") {
+      const prompt = requireFlag(flags, "prompt");
+      const json = hasFlag(flags, "json");
+      const quiet = hasFlag(flags, "quiet");
+      const out = flags.out;
+
+      const mod = await import("./src/plan.js");
+      const fn = pickExport(mod, ["createPlan"], "./src/plan.js");
+
+      const plan = fn(prompt);
+
+      if (out) {
+        const resolved = path.isAbsolute(out) ? out : path.resolve(process.cwd(), String(out));
+        writeJsonFile(resolved, plan);
+      }
+
+      if (json || quiet) {
+        process.stdout.write(JSON.stringify(plan) + "\n");
+      } else {
+        process.stdout.write("=== PLAN MODE ===\n");
+        process.stdout.write(`Goal: ${plan.goal}\n\n`);
+        process.stdout.write("Steps:\n");
+        for (const s of plan.steps) {
+          process.stdout.write(`- ${s.id}: ${s.title}\n`);
+        }
+        process.stdout.write("\nTip: use --json for CI-stable output.\n");
+      }
+
+      return;
+    }
+
     if (cmd === "validate") {
       const app = requireFlag(flags, "app");
       const json = hasFlag(flags, "json");
@@ -125,7 +172,7 @@ async function main() {
       const out = flags.out;
       const profile = flags.profile;
 
-      // ✅ NEW: install-mode comes from parsed flags (no "args" needed)
+      // ✅ install-mode comes from parsed flags (no raw argv scanning)
       const installMode = normalizeInstallMode(flags["install-mode"]);
 
       const mod = await import("./src/validate.js");
@@ -136,7 +183,7 @@ async function main() {
         json,
         quiet,
         noInstall,
-        installMode, // ✅ pass through
+        installMode,
         outPath: out,
         profile,
       });
@@ -155,7 +202,7 @@ async function main() {
       const max = flags.max ? Number(flags.max) : undefined;
       const include = flags.include ? String(flags.include) : undefined;
 
-      // ✅ NEW: install-mode comes from parsed flags
+      // ✅ install-mode comes from parsed flags
       const installMode = normalizeInstallMode(flags["install-mode"]);
 
       const mod = await import("./src/validate-all.js");
@@ -166,7 +213,7 @@ async function main() {
         json,
         quiet,
         noInstall,
-        installMode, // ✅ pass through
+        installMode,
         outPath: out,
         profile,
         progress,
