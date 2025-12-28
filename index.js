@@ -1,25 +1,52 @@
-import 'dotenv/config';
-import OpenAI from 'openai';
+// index.js
+import "dotenv/config";
+import minimist from "minimist";
+import { runPlanAgent, runWriteAgent } from "./src/agent.js";
+import { savePlan, applyWriteSpec } from "./src/writer.js";
 
-const client = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+async function main() {
+  const args = minimist(process.argv.slice(2));
+  const prompt = args.prompt || args.p;
 
-async function run() {
+  const approved = Boolean(args.approve); // only writes if true
+  const force = Boolean(args.force);      // allows overwrite if true
+
   if (!process.env.OPENAI_API_KEY) {
-    console.error('❌ OPENAI_API_KEY is missing (check your .env file)');
+    console.error("Missing OPENAI_API_KEY in environment.");
+    process.exit(1);
+  }
+
+  if (!prompt) {
+    console.log('Usage: node index.js --prompt "Your request here" [--approve] [--force]');
+    process.exit(0);
+  }
+
+  console.log("API Key loaded");
+  console.log("\n--- PLAN MODE ---\n");
+
+  const plan = await runPlanAgent({ prompt });
+  console.log(plan);
+
+  const savedTo = await savePlan(plan);
+  console.log(`\nPlan saved to: ${savedTo}`);
+
+  // Approval gate: stop here unless --approve is provided
+  if (!approved) {
+    console.log("\nApproval required to write files.");
+    console.log('Re-run with: node index.js --prompt "..." --approve');
     return;
   }
 
-  console.log('✅ API key loaded');
+  console.log("\n--- APPROVED: WRITE MODE ---\n");
+  const writeSpecJson = await runWriteAgent({ prompt, plan });
 
-  const response = await client.responses.create({
-    model: 'gpt-4.1-mini',
-    input: 'Say hello and explain what an AI app builder is.',
-  });
+  const written = await applyWriteSpec(writeSpecJson, { overwrite: force });
 
-  console.log('\n🤖 AI RESPONSE:\n');
-  console.log(response.output_text);
+  console.log("\nFiles written:");
+  for (const f of written) console.log(`- ${f}`);
 }
 
-run().catch(console.error);
+main().catch((err) => {
+  console.error(err?.message || err);
+  process.exit(1);
+});

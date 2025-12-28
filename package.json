@@ -27,6 +27,8 @@
   "homepage": "https://github.com/pietervb-42/ai-app-builder#readme",
   "dependencies": {
     "dotenv": "^17.2.3",
+    "fs-extra": "^11.3.3",
+    "minimist": "^1.2.8",
     "openai": "^6.15.0"
   }
 }
