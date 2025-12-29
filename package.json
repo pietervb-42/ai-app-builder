@@ -6,7 +6,11 @@
   "type": "module",
   "scripts": {
     "start": "node index.js",
-    "dev": "node index.js"
+    "dev": "node index.js",
+
+    "ci:contracts": "cmd /c \"if not exist reports mkdir reports && node index.js validate --app .\\outputs\\drift_test4 --json 1> .\\reports\\validate.json 2> .\\reports\\validate.stderr.log && node index.js contract:check --cmd validate --file .\\reports\\validate.json --ci && node index.js validate:all --root .\\outputs --json 1> .\\reports\\validate-all.json 2> .\\reports\\validate-all.stderr.log && node index.js contract:check --cmd validate:all --file .\\reports\\validate-all.json --ci && node index.js report:ci --root .\\outputs --json 1> .\\reports\\report-ci.json 2> .\\reports\\report-ci.stderr.log && node index.js contract:check --cmd report:ci --file .\\reports\\report-ci.json --ci && node index.js manifest:refresh:all --root .\\outputs --json 1> .\\reports\\manifest-refresh-all.json 2> .\\reports\\manifest-refresh-all.stderr.log && node index.js contract:check --cmd manifest:refresh:all --file .\\reports\\manifest-refresh-all.json --ci\"",
+
+    "ci:contracts:update": "cmd /c \"if not exist reports mkdir reports && node index.js validate --app .\\outputs\\drift_test4 --json 1> .\\reports\\validate.json 2> .\\reports\\validate.stderr.log && node index.js contract:update --cmd validate --file .\\reports\\validate.json --json && node index.js validate:all --root .\\outputs --json 1> .\\reports\\validate-all.json 2> .\\reports\\validate-all.stderr.log && node index.js contract:update --cmd validate:all --file .\\reports\\validate-all.json --json && node index.js report:ci --root .\\outputs --json 1> .\\reports\\report-ci.json 2> .\\reports\\report-ci.stderr.log && node index.js contract:update --cmd report:ci --file .\\reports\\report-ci.json --json && node index.js manifest:refresh:all --root .\\outputs --json 1> .\\reports\\manifest-refresh-all.json 2> .\\reports\\manifest-refresh-all.stderr.log && node index.js contract:update --cmd manifest:refresh:all --file .\\reports\\manifest-refresh-all.json --json\""
   },
   "repository": {
     "type": "git",
