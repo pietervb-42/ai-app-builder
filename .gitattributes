@@ -1,0 +1,2 @@
+# Enforce stable line endings for machine artifacts
+*.json text eol=lf

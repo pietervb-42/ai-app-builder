@@ -1,0 +1,22 @@
+{
+  "templates": [
+    {
+      "id": "node-hello",
+      "name": "Node Hello",
+      "path": "templates/node-hello",
+      "description": "Minimal Node.js hello world starter."
+    },
+    {
+      "id": "node-express-api",
+      "name": "Node Express API",
+      "path": "templates/node-express-api",
+      "description": "Minimal Express API with health + versioned routes."
+    },
+    {
+      "id": "node-express-api-sqlite",
+      "name": "Node Express API + SQLite",
+      "path": "templates/node-express-api-sqlite",
+      "description": "Express API with SQLite persistence (better-sqlite3) and users GET/POST."
+    }
+  ]
+}
