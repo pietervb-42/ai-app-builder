@@ -37,6 +37,13 @@ function hasFlag(flags, name) {
   return Boolean(flags[name]);
 }
 
+function isTrueish(v) {
+  if (v === true) return true;
+  if (v === false || v == null) return false;
+  const s = String(v).toLowerCase().trim();
+  return s === "true" || s === "1" || s === "yes" || s === "y" || s === "on";
+}
+
 function pickExport(mod, candidates, modulePathForError) {
   for (const name of candidates) {
     if (typeof mod[name] === "function") return mod[name];
@@ -74,7 +81,7 @@ function printUsage() {
 ai-app-builder CLI
 
 Commands:
-  templates:list
+  templates:list [--json]
 
   plan --prompt "<text>" [--out <file>] [--json] [--quiet]
 
@@ -91,11 +98,28 @@ Commands:
                [--install-mode <always|never|if-missing>] [--out <file>] [--profile <name>]
                [--progress] [--max <n>] [--include <text>]
 
+  report:ci --root <path> [--quiet] [--json] [--no-install]
+            [--install-mode <always|never|if-missing>] [--out <file>] [--profile <name>]
+            [--progress] [--max <n>] [--include <text>] [--heal-manifest]
+
   manifest:refresh --app <path> [--apply] [--templateDir <path>]
+  manifest:refresh:all --root <path> [--apply] [--templateDir <path>]
+                       [--progress] [--max <n>] [--include <text>]
+
   manifest:init --app <path> --yes --templateDir <path> [--template <name>]
-  drift:report --app <path> [--diff]
-  regen:preview --app <path>
-  regen:apply --app <path> --yes [--overwriteModified]
+
+  drift:report --app <path> [--diff] [--json] [--quiet]
+  regen:preview --app <path> [--json] [--quiet]
+  regen:apply --app <path> --yes [--overwriteModified] [--json] [--quiet]
+
+  schema:check --cmd <validate|validate:all|report:ci|manifest:refresh:all> (--file <path> | --stdin true)
+               [--json] [--quiet]
+
+  contract:check --cmd <validate|validate:all|report:ci|manifest:refresh:all> (--file <path> | --stdin true)
+                 [--contracts-dir <path>] [--json] [--quiet]
+
+  contract:update --cmd <validate|validate:all|report:ci|manifest:refresh:all> (--file <path> | --stdin true)
+                  [--contracts-dir <path>] [--json] [--quiet]
 
 Flags:
   --from-plan <file>   Generate using a plan JSON artifact (Step 14 handshake)
@@ -104,20 +128,78 @@ Flags:
 
   --prompt <text>      Required for plan/build. Goal/requirements statement.
   --dry-run            Build: plan + resolve only; no writes; no validate.
-  --quiet              Suppress npm install/start output (CI friendly where supported)
+  --quiet              Suppress human logs where supported (keeps JSON clean)
   --json               Print ONLY the final JSON result (one line)
-  --no-install         Skip npm install (legacy; validate/validate:all)
+  --no-install         Skip npm install (legacy; validate/validate:all/report:ci)
   --install-mode       Install behavior: always|never|if-missing
   --profile <n>        Override validation profile selection
   --progress           Print progress lines to stderr (keeps JSON clean)
-  --max <n>            Limit number of apps validated (debug)
-  --include <text>     Only validate app paths containing this substring
+  --max <n>            Limit number of apps processed (debug)
+  --include <text>     Only process app paths containing this substring
+  --heal-manifest      report:ci: allow report-ci runner to auto-refresh manifest when safe
+
+CI convenience:
+  --ci                 Alias for --json --quiet (JSON-only + low-noise)
+  --json-on-pipe true  If stdout is piped (not TTY), force --json
 `.trim()
   );
 }
 
+// Minimal, deterministic app discovery: directories under root that contain builder.manifest.json
+function discoverApps(rootPath, { include, max } = {}) {
+  const absRoot = path.isAbsolute(rootPath)
+    ? rootPath
+    : path.resolve(process.cwd(), rootPath);
+
+  if (!fs.existsSync(absRoot) || !fs.statSync(absRoot).isDirectory()) {
+    throw new Error(`Root path does not exist or is not a directory: ${absRoot}`);
+  }
+
+  const entries = fs.readdirSync(absRoot, { withFileTypes: true });
+  let dirs = entries.filter((e) => e.isDirectory()).map((e) => e.name);
+
+  dirs.sort((a, b) => a.localeCompare(b));
+
+  const apps = [];
+  for (const d of dirs) {
+    const rel = path.join(rootPath, d);
+    const abs = path.join(absRoot, d);
+
+    if (include && !String(rel).includes(include)) continue;
+
+    const manifestPath = path.join(abs, "builder.manifest.json");
+    if (fs.existsSync(manifestPath) && fs.statSync(manifestPath).isFile()) {
+      apps.push({ relPath: rel, absPath: abs });
+      if (typeof max === "number" && Number.isFinite(max) && apps.length >= max) {
+        break;
+      }
+    }
+  }
+
+  return { absRoot, apps };
+}
+
 async function main() {
   const { cmd, flags } = parseArgs(process.argv);
+
+  // Step 31: CI contract hardening (minimal + deterministic)
+  const ciMode = hasFlag(flags, "ci");
+  const jsonOnPipe = isTrueish(flags["json-on-pipe"]);
+
+  // IMPORTANT: On Windows with cmd redirection, isTTY can be undefined.
+  // Treat anything that is NOT explicitly true as "piped/not-a-tty".
+  const stdoutNotTty = Boolean(process.stdout && process.stdout.isTTY !== true);
+
+  if (ciMode) {
+    flags.json = true;
+    flags.quiet = true;
+  }
+
+  if (jsonOnPipe && stdoutNotTty) {
+    flags.json = true;
+  }
+
+  const jsonMode = hasFlag(flags, "json") || ciMode || (jsonOnPipe && stdoutNotTty);
 
   try {
     if (!cmd || cmd === "help" || cmd === "--help" || cmd === "-h") {
@@ -126,13 +208,35 @@ async function main() {
     }
 
     if (cmd === "templates:list") {
+      const json = hasFlag(flags, "json");
       const mod = await import("./src/templates.js");
       const fn = pickExport(
         mod,
         ["templatesList", "listTemplates"],
         "./src/templates.js"
       );
-      await fn();
+      await fn({ json });
+      return;
+    }
+
+    if (cmd === "schema:check") {
+      const mod = await import("./src/schema-check.js");
+      const fn = pickExport(mod, ["schemaCheck"], "./src/schema-check.js");
+      await fn({ flags });
+      return;
+    }
+
+    if (cmd === "contract:check") {
+      const mod = await import("./src/contract-check.js");
+      const fn = pickExport(mod, ["contractCheck"], "./src/contract-check.js");
+      await fn({ flags });
+      return;
+    }
+
+    if (cmd === "contract:update") {
+      const mod = await import("./src/contract-check.js");
+      const fn = pickExport(mod, ["contractUpdate"], "./src/contract-check.js");
+      await fn({ flags });
       return;
     }
 
@@ -175,9 +279,21 @@ async function main() {
       // Step 14 path: generate from plan artifact
       if (fromPlan) {
         const planMod = await import("./src/plan-handoff.js");
-        const loadFn = pickExport(planMod, ["loadPlanFromFile"], "./src/plan-handoff.js");
-        const selectFn = pickExport(planMod, ["selectTemplateFromPlan"], "./src/plan-handoff.js");
-        const defaultOutFn = pickExport(planMod, ["defaultOutPathFromPlan"], "./src/plan-handoff.js");
+        const loadFn = pickExport(
+          planMod,
+          ["loadPlanFromFile"],
+          "./src/plan-handoff.js"
+        );
+        const selectFn = pickExport(
+          planMod,
+          ["selectTemplateFromPlan"],
+          "./src/plan-handoff.js"
+        );
+        const defaultOutFn = pickExport(
+          planMod,
+          ["defaultOutPathFromPlan"],
+          "./src/plan-handoff.js"
+        );
 
         const { plan } = loadFn(fromPlan);
 
@@ -283,15 +399,138 @@ async function main() {
       return;
     }
 
+    if (cmd === "report:ci") {
+      const root = requireFlag(flags, "root");
+      const json = hasFlag(flags, "json");
+      const quiet = hasFlag(flags, "quiet");
+      const noInstall = hasFlag(flags, "no-install");
+      const out = flags.out;
+      const profile = flags.profile;
+
+      const progress = hasFlag(flags, "progress");
+      const max = flags.max ? Number(flags.max) : undefined;
+      const include = flags.include ? String(flags.include) : undefined;
+
+      const installMode = normalizeInstallMode(flags["install-mode"]);
+      const healManifest = hasFlag(flags, "heal-manifest");
+
+      const mod = await import("./src/report-ci.js");
+      const fn = pickExport(mod, ["reportCi"], "./src/report-ci.js");
+
+      await fn({
+        root,
+        rootPath: root,
+
+        json,
+        quiet,
+        noInstall,
+
+        installMode,
+        outPath: out,
+        profile,
+
+        progress,
+        max,
+        include,
+
+        healManifest,
+      });
+      return;
+    }
+
     if (cmd === "manifest:refresh") {
       const app = requireFlag(flags, "app");
-      const apply = hasFlag(flags, "apply");
+
+      let apply = true;
+      if (Object.prototype.hasOwnProperty.call(flags, "apply")) {
+        const v = flags.apply;
+        if (v === true) apply = true;
+        else {
+          const s = String(v).toLowerCase().trim();
+          apply = !(s === "false" || s === "0" || s === "no");
+        }
+      }
+
       const templateDir = flags.templateDir;
 
       const mod = await import("./src/manifest.js");
       const fn = pickExport(mod, ["manifestRefresh"], "./src/manifest.js");
+
       await fn({ appPath: app, apply, templateDir });
       return;
+    }
+
+    if (cmd === "manifest:refresh:all") {
+      const root = requireFlag(flags, "root");
+
+      let apply = true;
+      if (Object.prototype.hasOwnProperty.call(flags, "apply")) {
+        const v = flags.apply;
+        if (v === true) apply = true;
+        else {
+          const s = String(v).toLowerCase().trim();
+          apply = !(s === "false" || s === "0" || s === "no");
+        }
+      }
+
+      const templateDir = flags.templateDir;
+
+      const progress = hasFlag(flags, "progress");
+      const max = flags.max ? Number(flags.max) : undefined;
+      const include = flags.include ? String(flags.include) : undefined;
+
+      const { apps } = discoverApps(root, { include, max });
+
+      const mod = await import("./src/manifest.js");
+      const fn = pickExport(mod, ["manifestRefreshCore"], "./src/manifest.js");
+
+      const startedAt = new Date().toISOString();
+      let okCount = 0;
+      let failCount = 0;
+      const results = [];
+
+      for (let i = 0; i < apps.length; i++) {
+        const a = apps[i];
+        if (progress) {
+          process.stderr.write(
+            `[manifest:refresh:all] ${i + 1}/${apps.length} ${a.relPath}\n`
+          );
+        }
+        try {
+          const r = await fn({ appPath: a.relPath, apply, templateDir });
+          okCount++;
+          results.push({
+            appPath: a.relPath,
+            ok: true,
+            result: r ?? null,
+          });
+        } catch (e) {
+          failCount++;
+          results.push({
+            appPath: a.relPath,
+            ok: false,
+            error: e?.message || String(e),
+          });
+        }
+      }
+
+      const finishedAt = new Date().toISOString();
+      const payload = {
+        ok: failCount === 0,
+        rootPath: path.isAbsolute(root) ? root : path.resolve(process.cwd(), root),
+        startedAt,
+        finishedAt,
+        appsFound: apps.length,
+        okCount,
+        failCount,
+        apply,
+        include: include ?? null,
+        max: typeof max === "number" && Number.isFinite(max) ? max : null,
+        results,
+      };
+
+      process.stdout.write(JSON.stringify(payload) + "\n");
+      process.exit(payload.ok ? 0 : 1);
     }
 
     if (cmd === "manifest:init") {
@@ -309,19 +548,25 @@ async function main() {
     if (cmd === "drift:report") {
       const app = requireFlag(flags, "app");
       const diff = hasFlag(flags, "diff");
+      const json = hasFlag(flags, "json");
+      const quiet = hasFlag(flags, "quiet");
 
       const mod = await import("./src/diff.js");
       const fn = pickExport(mod, ["driftReport", "reportDrift"], "./src/diff.js");
-      await fn({ appPath: app, diff });
+
+      await fn({ appPath: app, diff, json, quiet });
       return;
     }
 
     if (cmd === "regen:preview") {
       const app = requireFlag(flags, "app");
+      const json = hasFlag(flags, "json");
+      const quiet = hasFlag(flags, "quiet");
 
       const mod = await import("./src/regen.js");
       const fn = pickExport(mod, ["regenPreview"], "./src/regen.js");
-      await fn({ appPath: app });
+
+      await fn({ appPath: app, json, quiet });
       return;
     }
 
@@ -329,16 +574,35 @@ async function main() {
       const app = requireFlag(flags, "app");
       const yes = hasFlag(flags, "yes");
       const overwriteModified = hasFlag(flags, "overwriteModified");
+      const json = hasFlag(flags, "json");
+      const quiet = hasFlag(flags, "quiet");
 
       const mod = await import("./src/regen.js");
       const fn = pickExport(mod, ["regenApply"], "./src/regen.js");
-      await fn({ appPath: app, yes, overwriteModified });
+
+      await fn({ appPath: app, yes, overwriteModified, json, quiet });
       return;
     }
 
     throw new Error(`Unknown command: ${cmd}`);
   } catch (err) {
-    console.error(`[error] ${err?.message || String(err)}`);
+    const message = err?.message || String(err);
+
+    if (jsonMode) {
+      process.stdout.write(
+        JSON.stringify({
+          ok: false,
+          error: {
+            code: "ERR_CLI",
+            message,
+            cmd: cmd || null,
+          },
+        }) + "\n"
+      );
+      process.exit(1);
+    }
+
+    console.error(`[error] ${message}`);
     process.exit(1);
   }
 }

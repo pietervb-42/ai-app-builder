@@ -1,11 +1,17 @@
+// src/validate.js
 import fs from "fs/promises";
 import path from "path";
 import net from "net";
 import { spawn } from "child_process";
 
 import { runValidationContract } from "../lib/validate/run.js";
-import { exitCodeForFailureClass, ValidationClass } from "../lib/validate/classes.js";
+import {
+  exitCodeForFailureClass,
+  ValidationClass,
+} from "../lib/validate/classes.js";
 import { inferTemplate } from "../lib/template/infer.js";
+import { verifyManifestIntegrity } from "./manifest.js";
+import { createOutput } from "./output.js";
 
 const MANIFEST_NAME = "builder.manifest.json";
 
@@ -23,6 +29,8 @@ function sleep(ms) {
 }
 
 function nowIso() {
+  // NOTE: Validation is runtime-dependent (port, timing). This is acceptable for validate outputs.
+  // Plan outputs must be deterministic; validate outputs reflect real execution.
   return new Date().toISOString();
 }
 
@@ -32,14 +40,23 @@ async function getFreePort() {
     srv.unref();
     srv.on("error", reject);
     srv.listen(0, "127.0.0.1", () => {
-      const { port } = srv.address();
+      const addr = srv.address();
+      const port = typeof addr === "object" && addr ? addr.port : 0;
       srv.close(() => resolve(port));
     });
   });
 }
 
+/**
+ * spawnLogged routing rules (CI-safe):
+ * - If opts.json === true:
+ *    - NEVER write child stdout to process.stdout (stdout must be JSON only in --json mode)
+ *    - Forward child stdout to process.stderr (human logs)
+ * - If opts.quiet === true:
+ *    - Do not forward streams at all (still captured)
+ */
 function spawnLogged(cmd, args, opts = {}) {
-  const { quiet = false, ...rest } = opts;
+  const { quiet = false, json = false, ...rest } = opts;
 
   const child = spawn(cmd, args, {
     ...rest,
@@ -53,13 +70,19 @@ function spawnLogged(cmd, args, opts = {}) {
   child.stdout?.on("data", (d) => {
     const s = d.toString();
     stdout += s;
-    if (!quiet) process.stdout.write(s);
+    if (quiet) return;
+
+    // In --json mode, stdout is reserved for the single machine JSON object.
+    if (json) process.stderr.write(s);
+    else process.stdout.write(s);
   });
 
   child.stderr?.on("data", (d) => {
     const s = d.toString();
     stderr += s;
-    if (!quiet) process.stderr.write(s);
+    if (quiet) return;
+
+    process.stderr.write(s);
   });
 
   return {
@@ -84,15 +107,16 @@ function spawnLogged(cmd, args, opts = {}) {
   };
 }
 
-function runNpm(args, { cwd, env, quiet = false }) {
+function runNpm(args, { cwd, env, quiet = false, json = false }) {
   if (process.platform === "win32") {
     return spawnLogged("cmd.exe", ["/d", "/s", "/c", "npm", ...args], {
       cwd,
       env,
       quiet,
+      json,
     });
   }
-  return spawnLogged("npm", args, { cwd, env, quiet });
+  return spawnLogged("npm", args, { cwd, env, quiet, json });
 }
 
 async function waitForHealth(url, timeoutMs) {
@@ -116,7 +140,13 @@ async function waitForHealth(url, timeoutMs) {
   return { ok: false, error: lastErr || new Error("health timeout") };
 }
 
-function makeValidationFailure({ template, appPath, failureClass, checkId, details }) {
+function makeValidationFailure({
+  template,
+  appPath,
+  failureClass,
+  checkId,
+  details,
+}) {
   return {
     ok: false,
     template,
@@ -163,15 +193,13 @@ function normalizeInstallMode({ installMode, noInstall }) {
   // Backwards compatibility: legacy flag wins
   if (noInstall) return "never";
 
-  // EASY WORKAROUND: environment variable override (no index.js changes)
-  // PowerShell:
-  //   $env:INSTALL_MODE="if-missing"
+  // environment variable override (kept)
   const envMode = process.env.INSTALL_MODE;
   if (envMode === "always" || envMode === "never" || envMode === "if-missing") {
     return envMode;
   }
 
-  // Optional: future CLI support if index.js passes installMode
+  // If not provided, default to always (existing behavior)
   if (!installMode) return "always";
 
   const v = String(installMode).toLowerCase().trim();
@@ -198,14 +226,83 @@ async function nodeModulesExists(appAbs) {
 export async function validateAppCore({
   appPath,
   quiet = false,
+  json = false,
   noInstall = false, // legacy
-  installMode, // NEW: always|never|if-missing
+  installMode, // always|never|if-missing
   profile = undefined,
 }) {
   const appAbs = path.resolve(appPath);
   const manifestPath = path.join(appAbs, MANIFEST_NAME);
 
-  // 29.2 template detection (support both manifest keys)
+  // Step 18: Manifest Integrity Lock (required)
+  const integrity = await verifyManifestIntegrity({
+    appPath: appAbs,
+    requireManifest: true,
+  });
+
+  if (!integrity.ok) {
+    // Still try to detect template name for reporting, but never bypass the lock.
+    let templateName = "unknown";
+    if (await pathExists(manifestPath)) {
+      try {
+        const raw = await fs.readFile(manifestPath, "utf8");
+        const m = JSON.parse(raw);
+        const t =
+          (typeof m?.template === "string" && m.template) ||
+          (typeof m?.templateName === "string" && m.templateName) ||
+          "unknown";
+        templateName = t;
+      } catch {
+        templateName = "unknown";
+      }
+
+      if (templateName === "unknown") {
+        templateName = await inferTemplate(appAbs);
+      }
+    } else {
+      templateName = await inferTemplate(appAbs);
+    }
+
+    const validation = makeValidationFailure({
+      template: templateName,
+      appPath: appAbs,
+      failureClass: ValidationClass.UNKNOWN_FAIL,
+      checkId: "manifest_integrity",
+      details: {
+        code: integrity?.error?.code || "ERR_MANIFEST_INTEGRITY",
+        message:
+          integrity?.error?.message || "Manifest integrity check failed.",
+        manifestPath: integrity.manifestPath,
+        expectedFingerprint: integrity.expectedFingerprint ?? null,
+        currentFingerprint: integrity.currentFingerprint ?? null,
+        details: integrity?.error?.details ?? undefined,
+      },
+    });
+
+    const result = {
+      ok: false,
+      appPath: appAbs,
+      template: templateName,
+      profile: profile || templateName,
+      installMode: normalizeInstallMode({ installMode, noInstall }),
+      didInstall: false,
+      manifestIntegrity: {
+        ok: false,
+        manifestPath: integrity.manifestPath,
+        error: integrity.error,
+        expectedFingerprint: integrity.expectedFingerprint ?? null,
+        currentFingerprint: integrity.currentFingerprint ?? null,
+      },
+      validation,
+    };
+
+    return {
+      result,
+      exitCode: exitCodeForFailureClass(validation.failureClass),
+    };
+  }
+
+  // template detection (support both manifest keys)
   let templateName = "unknown";
 
   if (await pathExists(manifestPath)) {
@@ -233,7 +330,7 @@ export async function validateAppCore({
 
   const profileUsed = profile || templateName;
 
-  // 29.1 install-mode
+  // install-mode
   const effectiveInstallMode = normalizeInstallMode({ installMode, noInstall });
 
   const attempts = 2;
@@ -256,6 +353,7 @@ export async function validateAppCore({
           cwd: appAbs,
           env: process.env,
           quiet,
+          json,
         }).wait();
 
         if (installRes.code !== 0) {
@@ -275,6 +373,13 @@ export async function validateAppCore({
               profile: profileUsed,
               installMode: effectiveInstallMode,
               didInstall: false,
+              manifestIntegrity: {
+                ok: true,
+                manifestPath: integrity.manifestPath,
+                expectedFingerprint: integrity.expectedFingerprint,
+                currentFingerprint: integrity.currentFingerprint,
+                matches: true,
+              },
               validation,
             };
 
@@ -286,7 +391,6 @@ export async function validateAppCore({
           continue;
         }
 
-        // install succeeded
         didInstall = true;
       } catch (e) {
         if (attempt === attempts) {
@@ -308,6 +412,13 @@ export async function validateAppCore({
             profile: profileUsed,
             installMode: effectiveInstallMode,
             didInstall: false,
+            manifestIntegrity: {
+              ok: true,
+              manifestPath: integrity.manifestPath,
+              expectedFingerprint: integrity.expectedFingerprint,
+              currentFingerprint: integrity.currentFingerprint,
+              matches: true,
+            },
             validation,
           };
 
@@ -326,7 +437,7 @@ export async function validateAppCore({
     const healthUrl = `${baseUrl}/health`;
 
     const env = { ...process.env, PORT: String(port) };
-    const server = runNpm(["start"], { cwd: appAbs, env, quiet });
+    const server = runNpm(["start"], { cwd: appAbs, env, quiet, json });
 
     // health gate
     const health = await waitForHealth(healthUrl, 15000);
@@ -349,6 +460,13 @@ export async function validateAppCore({
           profile: profileUsed,
           installMode: effectiveInstallMode,
           didInstall,
+          manifestIntegrity: {
+            ok: true,
+            manifestPath: integrity.manifestPath,
+            expectedFingerprint: integrity.expectedFingerprint,
+            currentFingerprint: integrity.currentFingerprint,
+            matches: true,
+          },
           validation,
         };
 
@@ -360,7 +478,7 @@ export async function validateAppCore({
       continue;
     }
 
-    // contract checks (profile override supported)
+    // contract checks
     let validation;
     try {
       validation = await runValidationContract({
@@ -396,6 +514,13 @@ export async function validateAppCore({
       profile: profileUsed,
       installMode: effectiveInstallMode,
       didInstall,
+      manifestIntegrity: {
+        ok: true,
+        manifestPath: integrity.manifestPath,
+        expectedFingerprint: integrity.expectedFingerprint,
+        currentFingerprint: integrity.currentFingerprint,
+        matches: true,
+      },
       validation,
     };
 
@@ -417,6 +542,13 @@ export async function validateAppCore({
     profile: profile || "unknown",
     installMode: normalizeInstallMode({ installMode, noInstall }),
     didInstall: false,
+    manifestIntegrity: {
+      ok: true,
+      manifestPath: integrity.manifestPath,
+      expectedFingerprint: integrity.expectedFingerprint,
+      currentFingerprint: integrity.currentFingerprint,
+      matches: true,
+    },
     validation,
   };
 
@@ -424,7 +556,35 @@ export async function validateAppCore({
 }
 
 /**
+ * Step 15 helper: NON-PRINTING, NON-EXITING runner.
+ * Used by build pipeline to avoid double JSON output and avoid process.exit().
+ */
+export async function validateAppRun({
+  appPath,
+  quiet = true,
+  json = false,
+  noInstall = false,
+  installMode,
+  profile,
+}) {
+  return validateAppCore({
+    appPath,
+    quiet,
+    json,
+    noInstall,
+    installMode,
+    profile,
+  });
+}
+
+/**
  * CLI wrapper: prints + writes outPath + exits deterministically.
+ *
+ * Step 30 (JSON purity):
+ * - If --json is present:
+ *    - stdout = ONE JSON object line only
+ *    - stderr = logs / progress only
+ *    - no banners, no mixed output
  */
 export async function validateApp({
   appPath,
@@ -435,28 +595,87 @@ export async function validateApp({
   outPath,
   profile,
 }) {
-  const { result, exitCode } = await validateAppCore({
-    appPath,
-    quiet,
-    noInstall,
-    installMode,
-    profile,
-  });
+  const out = createOutput({ json: Boolean(json), quiet: Boolean(quiet) || Boolean(json) });
 
-  if (outPath) {
-    await writeJsonFile(outPath, result);
+  try {
+    const { result, exitCode } = await validateAppCore({
+      appPath,
+      quiet: Boolean(quiet) || Boolean(json),
+      json: Boolean(json),
+      noInstall,
+      installMode,
+      profile,
+    });
+
+    if (outPath) {
+      await writeJsonFile(outPath, result);
+      if (!json && !quiet) {
+        process.stderr.write(`[out] ${path.resolve(outPath)}\n`);
+      }
+    }
+
+    if (json) {
+      out.emitJson(result);
+    } else {
+      process.stdout.write("\nVALIDATION RESULT:\n");
+      process.stdout.write(JSON.stringify(result, null, 2) + "\n");
+    }
+
+    process.exit(exitCode);
+  } catch (e) {
+    const appAbs = path.resolve(appPath);
+    const errMsg = String(e?.stack || e?.message || e);
+
+    const validation = makeValidationFailure({
+      template: "unknown",
+      appPath: appAbs,
+      failureClass: ValidationClass.UNKNOWN_FAIL,
+      checkId: "exception",
+      details: { error: errMsg },
+    });
+
+    const result = {
+      ok: false,
+      appPath: appAbs,
+      template: "unknown",
+      profile: profile || "unknown",
+      installMode: normalizeInstallMode({ installMode, noInstall }),
+      didInstall: false,
+      manifestIntegrity: {
+        ok: false,
+        manifestPath: path.join(appAbs, MANIFEST_NAME),
+        error: { code: "ERR_VALIDATE_EXCEPTION", message: errMsg },
+        expectedFingerprint: null,
+        currentFingerprint: null,
+      },
+      validation,
+    };
+
+    if (outPath) {
+      try {
+        await writeJsonFile(outPath, result);
+        if (!json && !quiet) {
+          process.stderr.write(`[out] ${path.resolve(outPath)}\n`);
+        }
+      } catch (writeErr) {
+        process.stderr.write(
+          `[validate] failed to write outPath: ${String(
+            writeErr?.message ?? writeErr
+          )}\n`
+        );
+      }
+    }
+
+    if (json) {
+      out.emitJson(result);
+    } else {
+      process.stderr.write(`[validate] exception: ${errMsg}\n`);
+      process.stdout.write("\nVALIDATION RESULT:\n");
+      process.stdout.write(JSON.stringify(result, null, 2) + "\n");
+    }
+
+    process.exit(exitCodeForFailureClass(ValidationClass.UNKNOWN_FAIL));
   }
-
-  if (json) {
-    console.log(JSON.stringify(result));
-  } else {
-    console.log("");
-    console.log("VALIDATION RESULT:");
-    console.log(JSON.stringify(result, null, 2));
-    if (outPath) console.log(`[out] ${path.resolve(outPath)}`);
-  }
-
-  process.exit(exitCode);
 }
 
 export async function validate({

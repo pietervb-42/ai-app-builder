@@ -40,3 +40,8 @@ rollback_test.log
 Thumbs.db
 .vscode/*
 !.vscode/settings.json
+# =====================
+# AI internal memory (local-only)
+# =====================
+ai/*.md
+output/plan.md

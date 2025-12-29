@@ -1,5 +1,6 @@
 // src/build.js
 import fs from "fs";
+import path from "path";
 
 import { createPlan } from "./plan.js";
 import { resolveFromPlanObject } from "./plan-handoff.js";
@@ -22,6 +23,10 @@ import { validateAppRun } from "./validate.js";
  * - PLAN + resolve template/outPath (+ suffix) only
  * - NO filesystem writes
  * - NO generate / manifest / validate
+ *
+ * Step 17: Absolute Path Normalisation (metadata only)
+ * - Add outPathAbs alongside outPath in build + dry-run output
+ * - No behavior changes
  */
 
 function safeString(x) {
@@ -65,6 +70,16 @@ function resolveUniqueOutPath(basePath) {
     if (!fs.existsSync(candidate)) return candidate;
     i++;
   }
+}
+
+/**
+ * Step 17 helper: deterministic absolute path for an outPath.
+ * - Works for relative and absolute inputs
+ * - Uses process.cwd() as the anchor (stable within a run)
+ * - No filesystem access
+ */
+function toAbsOutPath(outPath) {
+  return path.resolve(process.cwd(), safeString(outPath));
 }
 
 /**
@@ -126,7 +141,9 @@ export async function buildCommand({ flags }) {
   const quiet = !!flags.quiet;
   const dryRun = !!flags["dry-run"] || !!flags.dryRun;
 
-  const installMode = normalizeInstallMode(flags["install-mode"] ?? flags.installMode);
+  const installMode = normalizeInstallMode(
+    flags["install-mode"] ?? flags.installMode
+  );
 
   if (!prompt) {
     const result = fail("input", "ERR_MISSING_PROMPT", "Missing --prompt value.");
@@ -148,7 +165,9 @@ export async function buildCommand({ flags }) {
   // 1) PLAN (no I/O)
   const plan = createPlan(prompt);
   if (!plan?.ok) {
-    const result = fail("plan", "ERR_PLAN_FAILED", "PLAN did not return ok:true.", { plan });
+    const result = fail("plan", "ERR_PLAN_FAILED", "PLAN did not return ok:true.", {
+      plan,
+    });
     process.stdout.write(JSON.stringify(result) + "\n");
     return 1;
   }
@@ -175,6 +194,7 @@ export async function buildCommand({ flags }) {
 
   // Deterministic safe output selection (no overwrite)
   const outPath = resolveUniqueOutPath(baseOutPath);
+  const outPathAbs = toAbsOutPath(outPath);
   const willCreate = !fs.existsSync(outPath);
 
   // Step 16: DRY RUN (no writes, no validate)
@@ -185,6 +205,7 @@ export async function buildCommand({ flags }) {
       plan,
       template,
       outPath,
+      outPathAbs, // Step 17 metadata
       willCreate,
       installMode,
       willInstallAssumingFresh: computeWillInstallAssumingFresh({ installMode }),
@@ -203,9 +224,10 @@ export async function buildCommand({ flags }) {
   // Step 15 pipeline: generate + validate
   let validationResult = null;
   let valExit = 1;
+  let generatedAbs = null;
 
   const pipeline = async () => {
-    const generatedAbs = await generateApp({
+    generatedAbs = await generateApp({
       template,
       outPath,
     });
@@ -230,6 +252,7 @@ export async function buildCommand({ flags }) {
       plan,
       template,
       outPath,
+      outPathAbs, // Step 17 metadata (still useful on failure)
       error: {
         code: "ERR_BUILD_FAILED",
         message: String(e?.message ?? e),
@@ -246,6 +269,7 @@ export async function buildCommand({ flags }) {
     plan,
     template,
     outPath,
+    outPathAbs, // Step 17 metadata
     validation: validationResult,
   };
 
@@ -254,9 +278,7 @@ export async function buildCommand({ flags }) {
   if (!json && !quiet) {
     // Optional human hint to stderr (doesn't break JSON redirection)
     process.stderr.write(
-      final.ok
-        ? `[build] OK -> ${outPath}\n`
-        : `[build] FAIL -> ${outPath}\n`
+      final.ok ? `[build] OK -> ${outPath}\n` : `[build] FAIL -> ${outPath}\n`
     );
   }
 

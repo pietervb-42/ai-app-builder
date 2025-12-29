@@ -1,6 +1,8 @@
+// src/validate-all.js
 import fs from "fs/promises";
 import path from "path";
 import { validateAppCore } from "./validate.js";
+import { createOutput } from "./output.js";
 
 const MANIFEST_NAME = "builder.manifest.json";
 
@@ -15,6 +17,7 @@ async function pathExists(p) {
 
 async function walk(dir, found) {
   const entries = await fs.readdir(dir, { withFileTypes: true });
+  entries.sort((a, b) => a.name.localeCompare(b.name));
 
   for (const e of entries) {
     if (!e.isDirectory()) continue;
@@ -47,12 +50,29 @@ function toIso() {
   return new Date().toISOString();
 }
 
+function normalizeInstallMode({ installMode, noInstall }) {
+  // legacy wins
+  if (noInstall) return "never";
+
+  const envMode = process.env.INSTALL_MODE;
+  if (envMode === "always" || envMode === "never" || envMode === "if-missing") {
+    return envMode;
+  }
+
+  if (!installMode) return "always";
+
+  const v = String(installMode).toLowerCase().trim();
+  if (v === "always" || v === "never" || v === "if-missing") return v;
+
+  return "always";
+}
+
 export async function validateAll({
   rootPath,
   json = false,
   quiet = false,
-  noInstall = false,     // legacy
-  installMode,           // NEW
+  noInstall = false, // legacy
+  installMode, // NEW
   outPath,
   profile,
   progress = false,
@@ -67,7 +87,7 @@ export async function validateAll({
   let appPaths = Array.from(found).sort((a, b) => a.localeCompare(b));
 
   if (include) {
-    const needle = include.toLowerCase();
+    const needle = String(include).toLowerCase();
     appPaths = appPaths.filter((p) => p.toLowerCase().includes(needle));
   }
 
@@ -76,37 +96,48 @@ export async function validateAll({
   }
 
   const startedAt = toIso();
-
   const results = [];
   let maxExitCode = 0;
+
+  // Step 30/31 rules:
+  // - json => stdout single JSON object only
+  // - logs/progress => stderr only
+  const effectiveQuiet = Boolean(quiet) || Boolean(json);
+  const effectiveInstallMode = normalizeInstallMode({ installMode, noInstall });
+
+  const out = createOutput({ json: Boolean(json), quiet: effectiveQuiet });
 
   for (let i = 0; i < appPaths.length; i++) {
     const appPath = appPaths[i];
 
     if (progress) {
-      // stderr so JSON stdout remains clean in --json mode
-      console.error(`[validate:all] ${i + 1}/${appPaths.length} ${appPath}`);
+      // Always stderr; respect quiet, but allow progress when requested.
+      if (effectiveQuiet) {
+        out.log(`[validate:all] ${i + 1}/${appPaths.length} ${appPath}`);
+      } else {
+        out.log(`[validate:all] ${i + 1}/${appPaths.length} ${appPath}`);
+      }
     }
 
     try {
       const { result, exitCode } = await validateAppCore({
         appPath,
-        quiet,
+        quiet: effectiveQuiet,
+        json: Boolean(json),
         noInstall,
-        installMode,
+        installMode: effectiveInstallMode,
         profile,
       });
 
       results.push(result);
       if (exitCode > maxExitCode) maxExitCode = exitCode;
     } catch (e) {
-      // If ANY unexpected crash occurs, record it deterministically and continue
       const crash = {
         ok: false,
         appPath,
         template: "unknown",
         profile: profile || "unknown",
-        installMode: installMode || (noInstall ? "never" : "always"),
+        installMode: effectiveInstallMode,
         validation: {
           ok: false,
           template: "unknown",
@@ -141,21 +172,22 @@ export async function validateAll({
     startedAt,
     finishedAt,
     appsFound: appPaths.length,
-    installMode: installMode || (noInstall ? "never" : "always"),
+    installMode: effectiveInstallMode,
     results,
   };
 
   if (outPath) {
     await writeJsonFile(outPath, summary);
+    if (!json && !quiet) {
+      out.log(`[out] ${path.resolve(outPath)}`);
+    }
   }
 
   if (json) {
-    console.log(JSON.stringify(summary));
-  } else {
-    console.log("");
-    console.log("VALIDATE:ALL RESULT:");
-    console.log(JSON.stringify(summary, null, 2));
-    if (outPath) console.log(`[out] ${path.resolve(outPath)}`);
+    out.emitJson(summary);
+  } else if (!quiet) {
+    process.stdout.write("\nVALIDATE:ALL RESULT:\n");
+    process.stdout.write(JSON.stringify(summary, null, 2) + "\n");
   }
 
   process.exit(maxExitCode);
