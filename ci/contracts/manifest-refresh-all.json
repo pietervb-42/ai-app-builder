@@ -1,0 +1,297 @@
+{
+  "__contractCmd": "manifest:refresh:all",
+  "payload": {
+    "apply": true,
+    "appsFound": 10,
+    "failCount": 0,
+    "finishedAt": null,
+    "include": null,
+    "max": null,
+    "ok": true,
+    "okCount": 10,
+    "results": [
+      {
+        "appPath": "<PATH>",
+        "ok": true,
+        "result": {
+          "applied": true,
+          "appPath": "<PATH>",
+          "excludedDirs": [
+            "node_modules",
+            ".git",
+            ".builder_snapshots"
+          ],
+          "excludedFiles": [
+            "package-lock.json",
+            "npm-shrinkwrap.json",
+            "pnpm-lock.yaml",
+            "yarn.lock",
+            ".npmrc",
+            "npm-debug.log",
+            "yarn-error.log",
+            ".ds_store",
+            "thumbs.db"
+          ],
+          "fileMapEntries": 6,
+          "fingerprint": "1e357eccf977a56a5d0c2ee4c1d50ff637f8e793b32118808f26b667a8806aee",
+          "manifestPath": "<PATH>",
+          "manifestSchemaVersion": 2
+        }
+      },
+      {
+        "appPath": "<PATH>",
+        "ok": true,
+        "result": {
+          "applied": true,
+          "appPath": "<PATH>",
+          "excludedDirs": [
+            "node_modules",
+            ".git",
+            ".builder_snapshots"
+          ],
+          "excludedFiles": [
+            "package-lock.json",
+            "npm-shrinkwrap.json",
+            "pnpm-lock.yaml",
+            "yarn.lock",
+            ".npmrc",
+            "npm-debug.log",
+            "yarn-error.log",
+            ".ds_store",
+            "thumbs.db"
+          ],
+          "fileMapEntries": 6,
+          "fingerprint": "1e357eccf977a56a5d0c2ee4c1d50ff637f8e793b32118808f26b667a8806aee",
+          "manifestPath": "<PATH>",
+          "manifestSchemaVersion": 2
+        }
+      },
+      {
+        "appPath": "<PATH>",
+        "ok": true,
+        "result": {
+          "applied": true,
+          "appPath": "<PATH>",
+          "excludedDirs": [
+            "node_modules",
+            ".git",
+            ".builder_snapshots"
+          ],
+          "excludedFiles": [
+            "package-lock.json",
+            "npm-shrinkwrap.json",
+            "pnpm-lock.yaml",
+            "yarn.lock",
+            ".npmrc",
+            "npm-debug.log",
+            "yarn-error.log",
+            ".ds_store",
+            "thumbs.db"
+          ],
+          "fileMapEntries": 6,
+          "fingerprint": "1e357eccf977a56a5d0c2ee4c1d50ff637f8e793b32118808f26b667a8806aee",
+          "manifestPath": "<PATH>",
+          "manifestSchemaVersion": 2
+        }
+      },
+      {
+        "appPath": "<PATH>",
+        "ok": true,
+        "result": {
+          "applied": true,
+          "appPath": "<PATH>",
+          "excludedDirs": [
+            "node_modules",
+            ".git",
+            ".builder_snapshots"
+          ],
+          "excludedFiles": [
+            "package-lock.json",
+            "npm-shrinkwrap.json",
+            "pnpm-lock.yaml",
+            "yarn.lock",
+            ".npmrc",
+            "npm-debug.log",
+            "yarn-error.log",
+            ".ds_store",
+            "thumbs.db"
+          ],
+          "fileMapEntries": 6,
+          "fingerprint": "1e357eccf977a56a5d0c2ee4c1d50ff637f8e793b32118808f26b667a8806aee",
+          "manifestPath": "<PATH>",
+          "manifestSchemaVersion": 2
+        }
+      },
+      {
+        "appPath": "<PATH>",
+        "ok": true,
+        "result": {
+          "applied": true,
+          "appPath": "<PATH>",
+          "excludedDirs": [
+            "node_modules",
+            ".git",
+            ".builder_snapshots"
+          ],
+          "excludedFiles": [
+            "package-lock.json",
+            "npm-shrinkwrap.json",
+            "pnpm-lock.yaml",
+            "yarn.lock",
+            ".npmrc",
+            "npm-debug.log",
+            "yarn-error.log",
+            ".ds_store",
+            "thumbs.db"
+          ],
+          "fileMapEntries": 6,
+          "fingerprint": "7766042f049352ec9744d59238b1fab46ddd71aecb201a269cbb8aeb71de2be4",
+          "manifestPath": "<PATH>",
+          "manifestSchemaVersion": 2
+        }
+      },
+      {
+        "appPath": "<PATH>",
+        "ok": true,
+        "result": {
+          "applied": true,
+          "appPath": "<PATH>",
+          "excludedDirs": [
+            "node_modules",
+            ".git",
+            ".builder_snapshots"
+          ],
+          "excludedFiles": [
+            "package-lock.json",
+            "npm-shrinkwrap.json",
+            "pnpm-lock.yaml",
+            "yarn.lock",
+            ".npmrc",
+            "npm-debug.log",
+            "yarn-error.log",
+            ".ds_store",
+            "thumbs.db"
+          ],
+          "fileMapEntries": 6,
+          "fingerprint": "0aada4449716aa0e2fcef728a7a113abe756a43178931a7f7ada0861d3fa05ae",
+          "manifestPath": "<PATH>",
+          "manifestSchemaVersion": 2
+        }
+      },
+      {
+        "appPath": "<PATH>",
+        "ok": true,
+        "result": {
+          "applied": true,
+          "appPath": "<PATH>",
+          "excludedDirs": [
+            "node_modules",
+            ".git",
+            ".builder_snapshots"
+          ],
+          "excludedFiles": [
+            "package-lock.json",
+            "npm-shrinkwrap.json",
+            "pnpm-lock.yaml",
+            "yarn.lock",
+            ".npmrc",
+            "npm-debug.log",
+            "yarn-error.log",
+            ".ds_store",
+            "thumbs.db"
+          ],
+          "fileMapEntries": 6,
+          "fingerprint": "40f47722b37fece324d23bf015a69c6f58ace8d7dc5297e0cca8c1bf993faf2f",
+          "manifestPath": "<PATH>",
+          "manifestSchemaVersion": 2
+        }
+      },
+      {
+        "appPath": "<PATH>",
+        "ok": true,
+        "result": {
+          "applied": true,
+          "appPath": "<PATH>",
+          "excludedDirs": [
+            "node_modules",
+            ".git",
+            ".builder_snapshots"
+          ],
+          "excludedFiles": [
+            "package-lock.json",
+            "npm-shrinkwrap.json",
+            "pnpm-lock.yaml",
+            "yarn.lock",
+            ".npmrc",
+            "npm-debug.log",
+            "yarn-error.log",
+            ".ds_store",
+            "thumbs.db"
+          ],
+          "fileMapEntries": 6,
+          "fingerprint": "7766042f049352ec9744d59238b1fab46ddd71aecb201a269cbb8aeb71de2be4",
+          "manifestPath": "<PATH>",
+          "manifestSchemaVersion": 2
+        }
+      },
+      {
+        "appPath": "<PATH>",
+        "ok": true,
+        "result": {
+          "applied": true,
+          "appPath": "<PATH>",
+          "excludedDirs": [
+            "node_modules",
+            ".git",
+            ".builder_snapshots"
+          ],
+          "excludedFiles": [
+            "package-lock.json",
+            "npm-shrinkwrap.json",
+            "pnpm-lock.yaml",
+            "yarn.lock",
+            ".npmrc",
+            "npm-debug.log",
+            "yarn-error.log",
+            ".ds_store",
+            "thumbs.db"
+          ],
+          "fileMapEntries": 6,
+          "fingerprint": "7766042f049352ec9744d59238b1fab46ddd71aecb201a269cbb8aeb71de2be4",
+          "manifestPath": "<PATH>",
+          "manifestSchemaVersion": 2
+        }
+      },
+      {
+        "appPath": "<PATH>",
+        "ok": true,
+        "result": {
+          "applied": true,
+          "appPath": "<PATH>",
+          "excludedDirs": [
+            "node_modules",
+            ".git",
+            ".builder_snapshots"
+          ],
+          "excludedFiles": [
+            "package-lock.json",
+            "npm-shrinkwrap.json",
+            "pnpm-lock.yaml",
+            "yarn.lock",
+            ".npmrc",
+            "npm-debug.log",
+            "yarn-error.log",
+            ".ds_store",
+            "thumbs.db"
+          ],
+          "fileMapEntries": 6,
+          "fingerprint": "1e357eccf977a56a5d0c2ee4c1d50ff637f8e793b32118808f26b667a8806aee",
+          "manifestPath": "<PATH>",
+          "manifestSchemaVersion": 2
+        }
+      }
+    ],
+    "rootPath": "<PATH>",
+    "startedAt": null
+  }
+}
