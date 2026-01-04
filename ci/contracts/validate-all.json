@@ -32,15 +32,16 @@
           "baseUrl": null,
           "checks": [
             {
-              "class": "UNKNOWN_FAIL",
+              "class": "SCHEMA_FAIL",
               "details": {
-                "code": "ERR_MANIFEST_DRIFT",
+                "code": "ERR_MANIFEST_INTEGRITY",
                 "currentFingerprint": "<HASH>",
                 "details": {
                   "currentFingerprint": "<HASH>",
                   "expectedFingerprint": "<HASH>"
                 },
                 "expectedFingerprint": "<HASH>",
+                "integrityErrorCode": "ERR_MANIFEST_DRIFT",
                 "manifestPath": "<PATH>",
                 "message": "Manifest fingerprint does not match current app fingerprint (drift detected)."
               },
@@ -50,7 +51,7 @@
             }
           ],
           "durationMs": 0,
-          "failureClass": "UNKNOWN_FAIL",
+          "failureClass": "SCHEMA_FAIL",
           "finishedAt": null,
           "ok": false,
           "startedAt": null,
@@ -83,15 +84,16 @@
           "baseUrl": null,
           "checks": [
             {
-              "class": "UNKNOWN_FAIL",
+              "class": "SCHEMA_FAIL",
               "details": {
-                "code": "ERR_MANIFEST_DRIFT",
+                "code": "ERR_MANIFEST_INTEGRITY",
                 "currentFingerprint": "<HASH>",
                 "details": {
                   "currentFingerprint": "<HASH>",
                   "expectedFingerprint": "<HASH>"
                 },
                 "expectedFingerprint": "<HASH>",
+                "integrityErrorCode": "ERR_MANIFEST_DRIFT",
                 "manifestPath": "<PATH>",
                 "message": "Manifest fingerprint does not match current app fingerprint (drift detected)."
               },
@@ -101,7 +103,7 @@
             }
           ],
           "durationMs": 0,
-          "failureClass": "UNKNOWN_FAIL",
+          "failureClass": "SCHEMA_FAIL",
           "finishedAt": null,
           "ok": false,
           "startedAt": null,
@@ -134,15 +136,16 @@
           "baseUrl": null,
           "checks": [
             {
-              "class": "UNKNOWN_FAIL",
+              "class": "SCHEMA_FAIL",
               "details": {
-                "code": "ERR_MANIFEST_DRIFT",
+                "code": "ERR_MANIFEST_INTEGRITY",
                 "currentFingerprint": "<HASH>",
                 "details": {
                   "currentFingerprint": "<HASH>",
                   "expectedFingerprint": "<HASH>"
                 },
                 "expectedFingerprint": "<HASH>",
+                "integrityErrorCode": "ERR_MANIFEST_DRIFT",
                 "manifestPath": "<PATH>",
                 "message": "Manifest fingerprint does not match current app fingerprint (drift detected)."
               },
@@ -152,7 +155,7 @@
             }
           ],
           "durationMs": 0,
-          "failureClass": "UNKNOWN_FAIL",
+          "failureClass": "SCHEMA_FAIL",
           "finishedAt": null,
           "ok": false,
           "startedAt": null,
@@ -185,15 +188,16 @@
           "baseUrl": null,
           "checks": [
             {
-              "class": "UNKNOWN_FAIL",
+              "class": "SCHEMA_FAIL",
               "details": {
-                "code": "ERR_MANIFEST_DRIFT",
+                "code": "ERR_MANIFEST_INTEGRITY",
                 "currentFingerprint": "<HASH>",
                 "details": {
                   "currentFingerprint": "<HASH>",
                   "expectedFingerprint": "<HASH>"
                 },
                 "expectedFingerprint": "<HASH>",
+                "integrityErrorCode": "ERR_MANIFEST_DRIFT",
                 "manifestPath": "<PATH>",
                 "message": "Manifest fingerprint does not match current app fingerprint (drift detected)."
               },
@@ -203,7 +207,7 @@
             }
           ],
           "durationMs": 0,
-          "failureClass": "UNKNOWN_FAIL",
+          "failureClass": "SCHEMA_FAIL",
           "finishedAt": null,
           "ok": false,
           "startedAt": null,
@@ -236,15 +240,16 @@
           "baseUrl": null,
           "checks": [
             {
-              "class": "UNKNOWN_FAIL",
+              "class": "SCHEMA_FAIL",
               "details": {
-                "code": "ERR_MANIFEST_DRIFT",
+                "code": "ERR_MANIFEST_INTEGRITY",
                 "currentFingerprint": "<HASH>",
                 "details": {
                   "currentFingerprint": "<HASH>",
                   "expectedFingerprint": "<HASH>"
                 },
                 "expectedFingerprint": "<HASH>",
+                "integrityErrorCode": "ERR_MANIFEST_DRIFT",
                 "manifestPath": "<PATH>",
                 "message": "Manifest fingerprint does not match current app fingerprint (drift detected)."
               },
@@ -254,7 +259,7 @@
             }
           ],
           "durationMs": 0,
-          "failureClass": "UNKNOWN_FAIL",
+          "failureClass": "SCHEMA_FAIL",
           "finishedAt": null,
           "ok": false,
           "startedAt": null,
@@ -287,15 +292,16 @@
           "baseUrl": null,
           "checks": [
             {
-              "class": "UNKNOWN_FAIL",
+              "class": "SCHEMA_FAIL",
               "details": {
-                "code": "ERR_MANIFEST_DRIFT",
+                "code": "ERR_MANIFEST_INTEGRITY",
                 "currentFingerprint": "<HASH>",
                 "details": {
                   "currentFingerprint": "<HASH>",
                   "expectedFingerprint": "<HASH>"
                 },
                 "expectedFingerprint": "<HASH>",
+                "integrityErrorCode": "ERR_MANIFEST_DRIFT",
                 "manifestPath": "<PATH>",
                 "message": "Manifest fingerprint does not match current app fingerprint (drift detected)."
               },
@@ -305,7 +311,7 @@
             }
           ],
           "durationMs": 0,
-          "failureClass": "UNKNOWN_FAIL",
+          "failureClass": "SCHEMA_FAIL",
           "finishedAt": null,
           "ok": false,
           "startedAt": null,
@@ -338,15 +344,16 @@
           "baseUrl": null,
           "checks": [
             {
-              "class": "UNKNOWN_FAIL",
+              "class": "SCHEMA_FAIL",
               "details": {
-                "code": "ERR_MANIFEST_DRIFT",
+                "code": "ERR_MANIFEST_INTEGRITY",
                 "currentFingerprint": "<HASH>",
                 "details": {
                   "currentFingerprint": "<HASH>",
                   "expectedFingerprint": "<HASH>"
                 },
                 "expectedFingerprint": "<HASH>",
+                "integrityErrorCode": "ERR_MANIFEST_DRIFT",
                 "manifestPath": "<PATH>",
                 "message": "Manifest fingerprint does not match current app fingerprint (drift detected)."
               },
@@ -356,7 +363,7 @@
             }
           ],
           "durationMs": 0,
-          "failureClass": "UNKNOWN_FAIL",
+          "failureClass": "SCHEMA_FAIL",
           "finishedAt": null,
           "ok": false,
           "startedAt": null,
@@ -389,15 +396,16 @@
           "baseUrl": null,
           "checks": [
             {
-              "class": "UNKNOWN_FAIL",
+              "class": "SCHEMA_FAIL",
               "details": {
-                "code": "ERR_MANIFEST_DRIFT",
+                "code": "ERR_MANIFEST_INTEGRITY",
                 "currentFingerprint": "<HASH>",
                 "details": {
                   "currentFingerprint": "<HASH>",
                   "expectedFingerprint": "<HASH>"
                 },
                 "expectedFingerprint": "<HASH>",
+                "integrityErrorCode": "ERR_MANIFEST_DRIFT",
                 "manifestPath": "<PATH>",
                 "message": "Manifest fingerprint does not match current app fingerprint (drift detected)."
               },
@@ -407,7 +415,7 @@
             }
           ],
           "durationMs": 0,
-          "failureClass": "UNKNOWN_FAIL",
+          "failureClass": "SCHEMA_FAIL",
           "finishedAt": null,
           "ok": false,
           "startedAt": null,
@@ -440,15 +448,16 @@
           "baseUrl": null,
           "checks": [
             {
-              "class": "UNKNOWN_FAIL",
+              "class": "SCHEMA_FAIL",
               "details": {
-                "code": "ERR_MANIFEST_DRIFT",
+                "code": "ERR_MANIFEST_INTEGRITY",
                 "currentFingerprint": "<HASH>",
                 "details": {
                   "currentFingerprint": "<HASH>",
                   "expectedFingerprint": "<HASH>"
                 },
                 "expectedFingerprint": "<HASH>",
+                "integrityErrorCode": "ERR_MANIFEST_DRIFT",
                 "manifestPath": "<PATH>",
                 "message": "Manifest fingerprint does not match current app fingerprint (drift detected)."
               },
@@ -458,7 +467,7 @@
             }
           ],
           "durationMs": 0,
-          "failureClass": "UNKNOWN_FAIL",
+          "failureClass": "SCHEMA_FAIL",
           "finishedAt": null,
           "ok": false,
           "startedAt": null,
@@ -491,15 +500,16 @@
           "baseUrl": null,
           "checks": [
             {
-              "class": "UNKNOWN_FAIL",
+              "class": "SCHEMA_FAIL",
               "details": {
-                "code": "ERR_MANIFEST_DRIFT",
+                "code": "ERR_MANIFEST_INTEGRITY",
                 "currentFingerprint": "<HASH>",
                 "details": {
                   "currentFingerprint": "<HASH>",
                   "expectedFingerprint": "<HASH>"
                 },
                 "expectedFingerprint": "<HASH>",
+                "integrityErrorCode": "ERR_MANIFEST_DRIFT",
                 "manifestPath": "<PATH>",
                 "message": "Manifest fingerprint does not match current app fingerprint (drift detected)."
               },
@@ -509,7 +519,7 @@
             }
           ],
           "durationMs": 0,
-          "failureClass": "UNKNOWN_FAIL",
+          "failureClass": "SCHEMA_FAIL",
           "finishedAt": null,
           "ok": false,
           "startedAt": null,
@@ -542,15 +552,16 @@
           "baseUrl": null,
           "checks": [
             {
-              "class": "UNKNOWN_FAIL",
+              "class": "SCHEMA_FAIL",
               "details": {
-                "code": "ERR_MANIFEST_DRIFT",
+                "code": "ERR_MANIFEST_INTEGRITY",
                 "currentFingerprint": "<HASH>",
                 "details": {
                   "currentFingerprint": "<HASH>",
                   "expectedFingerprint": "<HASH>"
                 },
                 "expectedFingerprint": "<HASH>",
+                "integrityErrorCode": "ERR_MANIFEST_DRIFT",
                 "manifestPath": "<PATH>",
                 "message": "Manifest fingerprint does not match current app fingerprint (drift detected)."
               },
@@ -560,7 +571,7 @@
             }
           ],
           "durationMs": 0,
-          "failureClass": "UNKNOWN_FAIL",
+          "failureClass": "SCHEMA_FAIL",
           "finishedAt": null,
           "ok": false,
           "startedAt": null,

@@ -1,0 +1,42 @@
+{
+  "__contractCmd": "validate@fixture:err_npm_start_exit",
+  "payload": {
+    "appPath": "<PATH>",
+    "didInstall": false,
+    "installMode": "never",
+    "manifestIntegrity": {
+      "currentFingerprint": "<HASH>",
+      "expectedFingerprint": "<HASH>",
+      "manifestPath": "<PATH>",
+      "matches": true,
+      "ok": true
+    },
+    "ok": false,
+    "profile": "fixture",
+    "template": "fixture",
+    "validation": {
+      "appPath": "<PATH>",
+      "baseUrl": null,
+      "checks": [
+        {
+          "class": "BOOT_FAIL",
+          "details": {
+            "code": "ERR_NPM_START_EXIT",
+            "exitCode": 3,
+            "message": "npm start exited early (exit 3).",
+            "stdoutSnippet": "> fixture-err-npm-start-exit@1.0.0 start > node -e \"process.exit(3)\""
+          },
+          "id": "start",
+          "ok": false,
+          "required": true
+        }
+      ],
+      "durationMs": 0,
+      "failureClass": "BOOT_FAIL",
+      "finishedAt": null,
+      "ok": false,
+      "startedAt": null,
+      "template": "fixture"
+    }
+  }
+}

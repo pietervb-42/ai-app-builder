@@ -1,0 +1,42 @@
+{
+  "__contractCmd": "validate@fixture:err_npm_install_exit",
+  "payload": {
+    "appPath": "<PATH>",
+    "didInstall": false,
+    "installMode": "always",
+    "manifestIntegrity": {
+      "currentFingerprint": "<HASH>",
+      "expectedFingerprint": "<HASH>",
+      "manifestPath": "<PATH>",
+      "matches": true,
+      "ok": true
+    },
+    "ok": false,
+    "profile": "fixture",
+    "template": "fixture",
+    "validation": {
+      "appPath": "<PATH>",
+      "baseUrl": null,
+      "checks": [
+        {
+          "class": "BOOT_FAIL",
+          "details": {
+            "code": "ERR_NPM_INSTALL_EXIT",
+            "exitCode": 1,
+            "installMode": "always",
+            "message": "npm install failed (exit 1)."
+          },
+          "id": "install",
+          "ok": false,
+          "required": true
+        }
+      ],
+      "durationMs": 0,
+      "failureClass": "BOOT_FAIL",
+      "finishedAt": null,
+      "ok": false,
+      "startedAt": null,
+      "template": "fixture"
+    }
+  }
+}

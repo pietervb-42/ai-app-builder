@@ -1,0 +1,41 @@
+{
+  "__contractCmd": "validate@fixture:err_health_timeout",
+  "payload": {
+    "appPath": "<PATH>",
+    "didInstall": false,
+    "installMode": "never",
+    "manifestIntegrity": {
+      "currentFingerprint": "<HASH>",
+      "expectedFingerprint": "<HASH>",
+      "manifestPath": "<PATH>",
+      "matches": true,
+      "ok": true
+    },
+    "ok": false,
+    "profile": "fixture",
+    "template": "fixture",
+    "validation": {
+      "appPath": "<PATH>",
+      "baseUrl": null,
+      "checks": [
+        {
+          "class": "HEALTH_FAIL",
+          "details": {
+            "code": "ERR_HEALTH_TIMEOUT",
+            "message": "Health request timed out.",
+            "url": ""
+          },
+          "id": "health",
+          "ok": false,
+          "required": true
+        }
+      ],
+      "durationMs": 0,
+      "failureClass": "HEALTH_FAIL",
+      "finishedAt": null,
+      "ok": false,
+      "startedAt": null,
+      "template": "fixture"
+    }
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "__contractCmd": "validate@fixture:err_manifest_integrity",
+  "payload": {
+    "appPath": "<PATH>",
+    "didInstall": false,
+    "installMode": "never",
+    "manifestIntegrity": {
+      "currentFingerprint": "<HASH>",
+      "error": {
+        "code": "ERR_MANIFEST_DRIFT",
+        "details": {
+          "currentFingerprint": "<HASH>",
+          "expectedFingerprint": "<HASH>"
+        },
+        "message": "Manifest fingerprint does not match current app fingerprint (drift detected)."
+      },
+      "expectedFingerprint": "<HASH>",
+      "manifestPath": "<PATH>",
+      "ok": false
+    },
+    "ok": false,
+    "profile": "fixture",
+    "template": "fixture",
+    "validation": {
+      "appPath": "<PATH>",
+      "baseUrl": null,
+      "checks": [
+        {
+          "class": "SCHEMA_FAIL",
+          "details": {
+            "code": "ERR_MANIFEST_INTEGRITY",
+            "currentFingerprint": "<HASH>",
+            "details": {
+              "currentFingerprint": "<HASH>",
+              "expectedFingerprint": "<HASH>"
+            },
+            "expectedFingerprint": "<HASH>",
+            "integrityErrorCode": "ERR_MANIFEST_DRIFT",
+            "manifestPath": "<PATH>",
+            "message": "Manifest fingerprint does not match current app fingerprint (drift detected)."
+          },
+          "id": "manifest_integrity",
+          "ok": false,
+          "required": true
+        }
+      ],
+      "durationMs": 0,
+      "failureClass": "SCHEMA_FAIL",
+      "finishedAt": null,
+      "ok": false,
+      "startedAt": null,
+      "template": "fixture"
+    }
+  }
+}

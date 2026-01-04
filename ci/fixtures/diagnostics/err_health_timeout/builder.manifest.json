@@ -1,0 +1,11 @@
+{
+  "manifestSchemaVersion": 2,
+  "template": "fixture",
+  "templateDir": null,
+  "fingerprint": "815b6b0f541736f42269f0950c31418ea5fb3818a2ba382ec7652667b525f632",
+  "fileMap": {
+    "package.json": "76169d6812472f8f8fc44fbcb5525bfe59b17d67fea5798789036dad3336e54f",
+    "server.js": "af99445ed69d0aef477b45529d1cf1fc6b79f64f07f680027c7d854ee16d7bfa"
+  },
+  "lastManifestInitUtc": "2026-01-04T08:12:47.991Z"
+}

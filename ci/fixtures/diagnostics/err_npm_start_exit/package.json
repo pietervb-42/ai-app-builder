@@ -1,0 +1,8 @@
+{
+  "name": "fixture-err-npm-start-exit",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "node -e \"process.exit(3)\""
+  }
+}

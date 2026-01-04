@@ -34,6 +34,71 @@ function nowIso() {
   return new Date().toISOString();
 }
 
+function oneLine(s) {
+  const t = String(s ?? "").replace(/\r?\n/g, " ").trim();
+  return t;
+}
+
+function shortMessage(s, max = 200) {
+  const t = oneLine(s);
+  return t.length > max ? t.slice(0, max) : t;
+}
+
+function normalizeError(e, fallbackCode, fallbackMessage) {
+  const code =
+    (e && typeof e === "object" && typeof e.code === "string" && e.code) ||
+    fallbackCode;
+
+  const msgRaw =
+    (e && typeof e === "object" && (e.message || e.stack)) ||
+    e ||
+    fallbackMessage ||
+    "Unknown error";
+
+  return {
+    code,
+    message: shortMessage(msgRaw, 220),
+  };
+}
+
+function pickErrorCode(err) {
+  if (!err) return null;
+  if (typeof err === "object") {
+    if (typeof err.code === "string" && err.code) return err.code;
+    const c = err.cause;
+    if (c && typeof c === "object" && typeof c.code === "string" && c.code) {
+      return c.code;
+    }
+  }
+  return null;
+}
+
+function mapHealthErrorCode(err, { timeoutFallback = "ERR_HEALTH_TIMEOUT" } = {}) {
+  const code = pickErrorCode(err);
+
+  // Most common Node/undici/network codes
+  if (code === "ECONNREFUSED") return "ERR_HEALTH_CONNREFUSED";
+  if (code === "EHOSTUNREACH") return "ERR_HEALTH_HOSTUNREACH";
+  if (code === "ENETUNREACH") return "ERR_HEALTH_NETUNREACH";
+  if (code === "ENOTFOUND") return "ERR_HEALTH_DNS";
+  if (code === "EAI_AGAIN") return "ERR_HEALTH_DNS";
+  if (code === "ETIMEDOUT") return "ERR_HEALTH_TIMEOUT";
+
+  // undici / fetch specific
+  if (code === "UND_ERR_CONNECT_TIMEOUT") return "ERR_HEALTH_TIMEOUT";
+  if (code === "UND_ERR_HEADERS_TIMEOUT") return "ERR_HEALTH_TIMEOUT";
+  if (code === "UND_ERR_BODY_TIMEOUT") return "ERR_HEALTH_TIMEOUT";
+  if (code === "UND_ERR_SOCKET") return "ERR_HEALTH_SOCKET";
+  if (code === "UND_ERR_CONNECT") return "ERR_HEALTH_CONNECT";
+
+  // TLS-ish
+  if (code === "CERT_HAS_EXPIRED") return "ERR_HEALTH_TLS";
+  if (code === "DEPTH_ZERO_SELF_SIGNED_CERT") return "ERR_HEALTH_TLS";
+  if (code === "SELF_SIGNED_CERT_IN_CHAIN") return "ERR_HEALTH_TLS";
+
+  return timeoutFallback;
+}
+
 async function getFreePort() {
   return new Promise((resolve, reject) => {
     const srv = net.createServer();
@@ -104,6 +169,7 @@ function spawnLogged(cmd, args, opts = {}) {
       } catch {}
     },
     isRunning: () => child.exitCode === null && !child.killed,
+    capture: () => ({ stdout, stderr }),
   };
 }
 
@@ -119,25 +185,86 @@ function runNpm(args, { cwd, env, quiet = false, json = false }) {
   return spawnLogged("npm", args, { cwd, env, quiet, json });
 }
 
-async function waitForHealth(url, timeoutMs) {
+async function fetchHealthOnce(url, { timeoutMs = 900 } = {}) {
+  const controller = new AbortController();
+  const t = setTimeout(() => controller.abort(), Math.max(1, Number(timeoutMs) || 900));
+
+  try {
+    const res = await fetch(url, { method: "GET", signal: controller.signal });
+    const status = res.status;
+
+    if (!res.ok) {
+      const e = new Error(`HTTP ${status}`);
+      e.code = `ERR_HEALTH_HTTP_${status}`;
+      return { ok: false, error: e };
+    }
+
+    // Health gate doesn't require strict JSON; parse best-effort.
+    const json = await res.json().catch(() => null);
+    return { ok: true, json };
+  } catch (e) {
+    // Deterministic timeout classification for hung responses.
+    if (e && typeof e === "object" && e.name === "AbortError") {
+      const te = new Error("Health request timed out.");
+      te.code = "ETIMEDOUT";
+      te.cause = e;
+      const err = new Error(te.message);
+      err.code = mapHealthErrorCode(te);
+      err.cause = te;
+      return { ok: false, error: err };
+    }
+
+    const code = mapHealthErrorCode(e);
+    const err = new Error(oneLine(e?.message ?? e));
+    err.code = code;
+    err.cause = e;
+    return { ok: false, error: err };
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+async function waitForServerReady({ server, healthUrl, timeoutMs }) {
   const start = Date.now();
   let lastErr = null;
 
   while (Date.now() - start < timeoutMs) {
-    try {
-      const res = await fetch(url, { method: "GET" });
-      if (res.ok) {
-        const json = await res.json().catch(() => null);
-        return { ok: true, json };
-      }
-      lastErr = new Error(`HTTP ${res.status}`);
-    } catch (e) {
-      lastErr = e;
+    // If the server process exited, that's a BOOT failure (not a health failure).
+    if (server?.child && server.child.exitCode !== null) {
+      const cap = server.capture ? server.capture() : { stdout: "", stderr: "" };
+      const stderrSnippet = shortMessage(cap.stderr ?? "", 200);
+      const stdoutSnippet = shortMessage(cap.stdout ?? "", 200);
+
+      return {
+        ok: false,
+        error: {
+          code: "ERR_NPM_START_EXIT",
+          message: `npm start exited early (exit ${server.child.exitCode}).`,
+          exitCode: server.child.exitCode,
+          stderrSnippet: stderrSnippet || undefined,
+          stdoutSnippet: stdoutSnippet || undefined,
+        },
+      };
     }
+
+    const once = await fetchHealthOnce(healthUrl, { timeoutMs: 900 });
+    if (once.ok) return once;
+
+    lastErr = once.error;
     await sleep(250);
   }
 
-  return { ok: false, error: lastErr || new Error("health timeout") };
+  // Timeout: still classify as HEALTH_FAIL, but with a deterministic code.
+  const code = mapHealthErrorCode(lastErr, { timeoutFallback: "ERR_HEALTH_TIMEOUT" });
+  const msg = lastErr?.message ? oneLine(lastErr.message) : "health timeout";
+
+  return {
+    ok: false,
+    error: {
+      code,
+      message: shortMessage(msg, 220),
+    },
+  };
 }
 
 function makeValidationFailure({
@@ -219,6 +346,24 @@ async function nodeModulesExists(appAbs) {
   }
 }
 
+function classForBootstrapFailure(checkId) {
+  // Deterministic mapping to existing classes (no UNKNOWN_FAIL).
+  // These failures happen before contract checks, but must still be classified.
+  switch (checkId) {
+    case "manifest_integrity":
+      return ValidationClass.SCHEMA_FAIL;
+    case "install":
+      return ValidationClass.BOOT_FAIL;
+    case "start":
+      return ValidationClass.BOOT_FAIL;
+    case "contract":
+      return ValidationClass.ENDPOINT_FAIL;
+    case "exception":
+    default:
+      return ValidationClass.BOOT_FAIL;
+  }
+}
+
 /**
  * Core validator: NO process.exit here.
  * Returns: { result, exitCode }
@@ -263,15 +408,27 @@ export async function validateAppCore({
       templateName = await inferTemplate(appAbs);
     }
 
+    // Force a stable top-level diagnostic code for integrity lock failures.
+    // Preserve the underlying integrity reason separately for debugging.
+    const integrityErrorCode =
+      integrity?.error && typeof integrity.error === "object" && typeof integrity.error.code === "string"
+        ? integrity.error.code
+        : null;
+
+    const err = {
+      code: "ERR_MANIFEST_INTEGRITY",
+      message: shortMessage(integrity?.error?.message ?? "Manifest integrity check failed.", 220),
+    };
+
     const validation = makeValidationFailure({
       template: templateName,
       appPath: appAbs,
-      failureClass: ValidationClass.UNKNOWN_FAIL,
+      failureClass: classForBootstrapFailure("manifest_integrity"),
       checkId: "manifest_integrity",
       details: {
-        code: integrity?.error?.code || "ERR_MANIFEST_INTEGRITY",
-        message:
-          integrity?.error?.message || "Manifest integrity check failed.",
+        code: err.code,
+        message: err.message,
+        integrityErrorCode: integrityErrorCode ?? null,
         manifestPath: integrity.manifestPath,
         expectedFingerprint: integrity.expectedFingerprint ?? null,
         currentFingerprint: integrity.currentFingerprint ?? null,
@@ -361,9 +518,14 @@ export async function validateAppCore({
             const validation = makeValidationFailure({
               template: templateName,
               appPath: appAbs,
-              failureClass: ValidationClass.UNKNOWN_FAIL,
+              failureClass: classForBootstrapFailure("install"),
               checkId: "install",
-              details: { code: installRes.code, installMode: effectiveInstallMode },
+              details: {
+                code: "ERR_NPM_INSTALL_EXIT",
+                message: `npm install failed (exit ${installRes.code}).`,
+                exitCode: installRes.code,
+                installMode: effectiveInstallMode,
+              },
             });
 
             const result = {
@@ -394,13 +556,20 @@ export async function validateAppCore({
         didInstall = true;
       } catch (e) {
         if (attempt === attempts) {
+          const err = normalizeError(
+            e,
+            "ERR_NPM_INSTALL_EXCEPTION",
+            "npm install threw an exception."
+          );
+
           const validation = makeValidationFailure({
             template: templateName,
             appPath: appAbs,
-            failureClass: ValidationClass.UNKNOWN_FAIL,
+            failureClass: classForBootstrapFailure("install"),
             checkId: "install",
             details: {
-              error: String(e?.message ?? e),
+              code: err.code,
+              message: err.message,
               installMode: effectiveInstallMode,
             },
           });
@@ -439,18 +608,72 @@ export async function validateAppCore({
     const env = { ...process.env, PORT: String(port) };
     const server = runNpm(["start"], { cwd: appAbs, env, quiet, json });
 
-    // health gate
-    const health = await waitForHealth(healthUrl, 15000);
+    // health gate + early-exit detection
+    const health = await waitForServerReady({
+      server,
+      healthUrl,
+      timeoutMs: 15000,
+    });
+
     if (!health.ok) {
       await stopServer(server);
 
+      // If npm start exited, classify as BOOT_FAIL, not HEALTH_FAIL.
+      if (health?.error?.code === "ERR_NPM_START_EXIT") {
+        if (attempt === attempts) {
+          const validation = makeValidationFailure({
+            template: templateName,
+            appPath: appAbs,
+            failureClass: classForBootstrapFailure("start"),
+            checkId: "start",
+            details: {
+              code: health.error.code,
+              message: health.error.message,
+              exitCode: health.error.exitCode ?? null,
+              stderrSnippet: health.error.stderrSnippet,
+              stdoutSnippet: health.error.stdoutSnippet,
+            },
+          });
+
+          const result = {
+            ok: false,
+            appPath: appAbs,
+            template: templateName,
+            profile: profileUsed,
+            installMode: effectiveInstallMode,
+            didInstall,
+            manifestIntegrity: {
+              ok: true,
+              manifestPath: integrity.manifestPath,
+              expectedFingerprint: integrity.expectedFingerprint,
+              currentFingerprint: integrity.currentFingerprint,
+              matches: true,
+            },
+            validation,
+          };
+
+          return {
+            result,
+            exitCode: exitCodeForFailureClass(validation.failureClass),
+          };
+        }
+        continue;
+      }
+
+      // Otherwise it's a HEALTH gate failure.
       if (attempt === attempts) {
+        const err = normalizeError(
+          health.error,
+          health?.error?.code || "ERR_HEALTH_GATE",
+          "Health gate failed."
+        );
+
         const validation = makeValidationFailure({
           template: templateName,
           appPath: appAbs,
           failureClass: ValidationClass.HEALTH_FAIL,
           checkId: "health",
-          details: { error: String(health.error || "unknown") },
+          details: { code: err.code, message: err.message, url: healthUrl },
         });
 
         const result = {
@@ -490,12 +713,18 @@ export async function validateAppCore({
       validation.templateOriginal = templateName;
       validation.profileUsed = profileUsed;
     } catch (e) {
+      const err = normalizeError(
+        e,
+        "ERR_CONTRACT_EXCEPTION",
+        "Validation contract runner threw an exception."
+      );
+
       validation = makeValidationFailure({
         template: templateName,
         appPath: appAbs,
-        failureClass: ValidationClass.UNKNOWN_FAIL,
+        failureClass: classForBootstrapFailure("contract"),
         checkId: "contract",
-        details: { error: String(e?.message ?? e) },
+        details: { code: err.code, message: err.message },
       });
 
       validation.templateOriginal = templateName;
@@ -530,9 +759,12 @@ export async function validateAppCore({
   const validation = makeValidationFailure({
     template: "unknown",
     appPath: path.resolve(appPath),
-    failureClass: ValidationClass.UNKNOWN_FAIL,
-    checkId: "unknown",
-    details: {},
+    failureClass: classForBootstrapFailure("exception"),
+    checkId: "fallthrough",
+    details: {
+      code: "ERR_VALIDATE_FALLTHROUGH",
+      message: "Validator exhausted attempts without producing a final result.",
+    },
   });
 
   const result = {
@@ -595,7 +827,10 @@ export async function validateApp({
   outPath,
   profile,
 }) {
-  const out = createOutput({ json: Boolean(json), quiet: Boolean(quiet) || Boolean(json) });
+  const out = createOutput({
+    json: Boolean(json),
+    quiet: Boolean(quiet) || Boolean(json),
+  });
 
   try {
     const { result, exitCode } = await validateAppCore({
@@ -624,14 +859,18 @@ export async function validateApp({
     process.exit(exitCode);
   } catch (e) {
     const appAbs = path.resolve(appPath);
-    const errMsg = String(e?.stack || e?.message || e);
+    const err = normalizeError(
+      e,
+      "ERR_VALIDATE_EXCEPTION",
+      "Validator threw an exception."
+    );
 
     const validation = makeValidationFailure({
       template: "unknown",
       appPath: appAbs,
-      failureClass: ValidationClass.UNKNOWN_FAIL,
+      failureClass: classForBootstrapFailure("exception"),
       checkId: "exception",
-      details: { error: errMsg },
+      details: { code: err.code, message: err.message },
     });
 
     const result = {
@@ -644,7 +883,7 @@ export async function validateApp({
       manifestIntegrity: {
         ok: false,
         manifestPath: path.join(appAbs, MANIFEST_NAME),
-        error: { code: "ERR_VALIDATE_EXCEPTION", message: errMsg },
+        error: { code: err.code, message: err.message },
         expectedFingerprint: null,
         currentFingerprint: null,
       },
@@ -659,7 +898,7 @@ export async function validateApp({
         }
       } catch (writeErr) {
         process.stderr.write(
-          `[validate] failed to write outPath: ${String(
+          `[validate] failed to write outPath: ${shortMessage(
             writeErr?.message ?? writeErr
           )}\n`
         );
@@ -669,12 +908,12 @@ export async function validateApp({
     if (json) {
       out.emitJson(result);
     } else {
-      process.stderr.write(`[validate] exception: ${errMsg}\n`);
+      process.stderr.write(`[validate] exception: ${err.message}\n`);
       process.stdout.write("\nVALIDATION RESULT:\n");
       process.stdout.write(JSON.stringify(result, null, 2) + "\n");
     }
 
-    process.exit(exitCodeForFailureClass(ValidationClass.UNKNOWN_FAIL));
+    process.exit(exitCodeForFailureClass(validation.failureClass));
   }
 }
 
