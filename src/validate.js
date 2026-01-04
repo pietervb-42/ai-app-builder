@@ -2,6 +2,7 @@
 import fs from "fs/promises";
 import path from "path";
 import net from "net";
+import http from "http";
 import { spawn } from "child_process";
 
 import { runValidationContract } from "../lib/validate/run.js";
@@ -84,7 +85,7 @@ function mapHealthErrorCode(err, { timeoutFallback = "ERR_HEALTH_TIMEOUT" } = {}
   if (code === "EAI_AGAIN") return "ERR_HEALTH_DNS";
   if (code === "ETIMEDOUT") return "ERR_HEALTH_TIMEOUT";
 
-  // undici / fetch specific
+  // undici / fetch specific (kept for compatibility if other code paths throw these)
   if (code === "UND_ERR_CONNECT_TIMEOUT") return "ERR_HEALTH_TIMEOUT";
   if (code === "UND_ERR_HEADERS_TIMEOUT") return "ERR_HEALTH_TIMEOUT";
   if (code === "UND_ERR_BODY_TIMEOUT") return "ERR_HEALTH_TIMEOUT";
@@ -211,43 +212,75 @@ function runNpm(args, { cwd, env, quiet = false, json = false }) {
   return spawnLogged("npm", args, { cwd, env, quiet, json });
 }
 
+/**
+ * Deterministic health probe using Node http.request (NOT fetch).
+ * This avoids undici/AbortController behavior where local connect failures can look like timeouts on Windows.
+ */
 async function fetchHealthOnce(url, { timeoutMs = 900 } = {}) {
-  const controller = new AbortController();
-  const t = setTimeout(() => controller.abort(), Math.max(1, Number(timeoutMs) || 900));
-
-  try {
-    const res = await fetch(url, { method: "GET", signal: controller.signal });
-    const status = res.status;
-
-    if (!res.ok) {
-      const e = new Error(`HTTP ${status}`);
-      e.code = `ERR_HEALTH_HTTP_${status}`;
-      return { ok: false, error: e };
+  return new Promise((resolve) => {
+    let u;
+    try {
+      u = new URL(url);
+    } catch (e) {
+      const err = new Error("Invalid URL");
+      err.code = "ERR_HEALTH_BAD_URL";
+      err.cause = e;
+      resolve({ ok: false, error: err });
+      return;
     }
 
-    // Health gate doesn't require strict JSON; parse best-effort.
-    const json = await res.json().catch(() => null);
-    return { ok: true, json };
-  } catch (e) {
-    // Deterministic timeout classification for hung responses.
-    if (e && typeof e === "object" && e.name === "AbortError") {
-      const te = new Error("Health request timed out.");
-      te.code = "ETIMEDOUT";
-      te.cause = e;
-      const err = new Error(te.message);
-      err.code = mapHealthErrorCode(te);
-      err.cause = te;
-      return { ok: false, error: err };
-    }
+    const req = http.request(
+      {
+        protocol: u.protocol,
+        hostname: u.hostname,
+        port: u.port,
+        path: `${u.pathname}${u.search}`,
+        method: "GET",
+        headers: { Accept: "application/json" },
+        timeout: Math.max(1, Number(timeoutMs) || 900),
+      },
+      (res) => {
+        let data = "";
+        res.setEncoding("utf8");
 
-    const code = mapHealthErrorCode(e);
-    const err = new Error(oneLine(e?.message ?? e));
-    err.code = code;
-    err.cause = e;
-    return { ok: false, error: err };
-  } finally {
-    clearTimeout(t);
-  }
+        res.on("data", (chunk) => (data += chunk));
+        res.on("end", () => {
+          const status = res.statusCode ?? null;
+
+          if (!status || status < 200 || status > 299) {
+            const e = new Error(`HTTP ${status ?? "null"}`);
+            e.code = status ? `ERR_HEALTH_HTTP_${status}` : "ERR_HEALTH_HTTP_NULL";
+            resolve({ ok: false, error: e });
+            return;
+          }
+
+          let json = null;
+          try {
+            json = JSON.parse(data);
+          } catch {
+            json = null; // best-effort; gate doesn't require strict JSON
+          }
+
+          resolve({ ok: true, json });
+        });
+      }
+    );
+
+    req.on("timeout", () => {
+      const e = new Error("Health request timed out.");
+      e.code = "ETIMEDOUT";
+      try {
+        req.destroy(e);
+      } catch {}
+    });
+
+    req.on("error", (e) => {
+      // Preserve native error codes like ECONNREFUSED
+      resolve({ ok: false, error: e });
+    });
+
+    req.end();
+  });
 }
 
 async function waitForServerReady({ server, healthUrl, timeoutMs }) {
@@ -441,13 +474,18 @@ export async function validateAppCore({
     // Force a stable top-level diagnostic code for integrity lock failures.
     // Preserve the underlying integrity reason separately for debugging.
     const integrityErrorCode =
-      integrity?.error && typeof integrity.error === "object" && typeof integrity.error.code === "string"
+      integrity?.error &&
+      typeof integrity.error === "object" &&
+      typeof integrity.error.code === "string"
         ? integrity.error.code
         : null;
 
     const err = {
       code: "ERR_MANIFEST_INTEGRITY",
-      message: shortMessage(integrity?.error?.message ?? "Manifest integrity check failed.", 220),
+      message: shortMessage(
+        integrity?.error?.message ?? "Manifest integrity check failed.",
+        220
+      ),
     };
 
     const validation = makeValidationFailure({
@@ -633,7 +671,7 @@ export async function validateAppCore({
     // boot
     const port = await getFreePort();
 
-    // CRITICAL: Use IPv4 explicitly for deterministic ECONNREFUSED on Windows.
+    // Use IPv4 explicitly (also avoids localhost IPv6 quirks)
     const baseUrl = `http://127.0.0.1:${port}`;
     const healthUrl = `${baseUrl}/health`;
 
