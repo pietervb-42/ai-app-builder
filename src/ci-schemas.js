@@ -73,10 +73,8 @@ function optionalField(obj, key, predicate, path, issues, typeLabel) {
 }
 
 /**
- * requireEitherField:
- * Accept value at obj[keyA] OR at obj[keyB] (nested on obj[nestedKey][keyB] pattern is handled by callers).
- *
- * We keep this simple and explicit for determinism.
+ * Accept value at obj[primaryKey] OR at secondaryObj[secondaryKey]
+ * (callers pass secondaryObj = obj.validation, etc.)
  */
 function requireEitherStringField({
   obj,
@@ -98,21 +96,28 @@ function requireEitherStringField({
 
   if (hasPrimary || hasSecondary) return;
 
-  // Determine most helpful “missing” path.
   const p1 = `${basePath}.${primaryKey}`;
   const p2 = secondaryObj ? `${basePath}.validation.${secondaryKey}` : `${basePath}.${secondaryKey}`;
-  issues.push(issue(p1, `Missing required field (expected ${label} at ${primaryKey} or validation.${secondaryKey})`));
-  // Also add a second issue so the user sees both possibilities clearly.
-  issues.push(issue(p2, `Missing required field (expected ${label} at ${primaryKey} or validation.${secondaryKey})`));
+
+  issues.push(
+    issue(
+      p1,
+      `Missing required field (expected ${label} at ${primaryKey} or validation.${secondaryKey})`
+    )
+  );
+  issues.push(
+    issue(
+      p2,
+      `Missing required field (expected ${label} at ${primaryKey} or validation.${secondaryKey})`
+    )
+  );
 }
 
 export function checkValidate(json) {
   const issues = [];
   const p = "$";
 
-  if (!isObject(json)) {
-    return { ok: false, issues: [issue(p, "Expected object")] };
-  }
+  if (!isObject(json)) return { ok: false, issues: [issue(p, "Expected object")] };
 
   requireField(json, "ok", isBoolean, p, issues, "boolean");
   requireField(json, "template", isString, p, issues, "string");
@@ -120,18 +125,14 @@ export function checkValidate(json) {
   requireField(json, "installMode", isString, p, issues, "string");
   requireField(json, "didInstall", isBoolean, p, issues, "boolean");
 
-  // manifestIntegrity: object with ok boolean
   requireField(json, "manifestIntegrity", isObject, p, issues, "object");
   if (isObject(json.manifestIntegrity)) {
     requireField(json.manifestIntegrity, "ok", isBoolean, `${p}.manifestIntegrity`, issues, "boolean");
   }
 
-  // validation: object with ok boolean + failureClass (string|null)
   requireField(json, "validation", isObject, p, issues, "object");
   if (isObject(json.validation)) {
     requireField(json.validation, "ok", isBoolean, `${p}.validation`, issues, "boolean");
-
-    // failureClass can be null when ok=true
     requireField(
       json.validation,
       "failureClass",
@@ -140,11 +141,9 @@ export function checkValidate(json) {
       issues,
       "string|null"
     );
-
     optionalField(json.validation, "checks", isArray, `${p}.validation`, issues, "array");
   }
 
-  // appPath exists either top-level OR under validation.appPath
   requireEitherStringField({
     obj: json,
     primaryKey: "appPath",
@@ -162,9 +161,7 @@ export function checkValidateAll(json) {
   const issues = [];
   const p = "$";
 
-  if (!isObject(json)) {
-    return { ok: false, issues: [issue(p, "Expected object")] };
-  }
+  if (!isObject(json)) return { ok: false, issues: [issue(p, "Expected object")] };
 
   requireField(json, "ok", isBoolean, p, issues, "boolean");
   requireField(json, "rootPath", isString, p, issues, "string");
@@ -174,7 +171,6 @@ export function checkValidateAll(json) {
   requireField(json, "installMode", isString, p, issues, "string");
   requireField(json, "results", isArray, p, issues, "array");
 
-  // results items: validate-shaped objects (loose)
   if (isArray(json.results)) {
     for (let i = 0; i < json.results.length; i++) {
       const item = json.results[i];
@@ -193,8 +189,6 @@ export function checkValidateAll(json) {
       requireField(item, "validation", isObject, ip, issues, "object");
       if (isObject(item.validation)) {
         requireField(item.validation, "ok", isBoolean, `${ip}.validation`, issues, "boolean");
-
-        // failureClass can be null when ok=true
         requireField(
           item.validation,
           "failureClass",
@@ -205,7 +199,6 @@ export function checkValidateAll(json) {
         );
       }
 
-      // appPath exists either top-level OR under item.validation.appPath
       requireEitherStringField({
         obj: item,
         primaryKey: "appPath",
@@ -225,9 +218,7 @@ export function checkReportCi(json) {
   const issues = [];
   const p = "$";
 
-  if (!isObject(json)) {
-    return { ok: false, issues: [issue(p, "Expected object")] };
-  }
+  if (!isObject(json)) return { ok: false, issues: [issue(p, "Expected object")] };
 
   requireField(json, "ok", isBoolean, p, issues, "boolean");
   requireField(json, "rootPath", isString, p, issues, "string");
@@ -237,17 +228,18 @@ export function checkReportCi(json) {
   requireField(json, "passCount", isNumber, p, issues, "number");
   requireField(json, "warnCount", isNumber, p, issues, "number");
   requireField(json, "hardFailCount", isNumber, p, issues, "number");
-
   requireField(json, "results", isArray, p, issues, "array");
 
   if (isArray(json.results)) {
     for (let i = 0; i < json.results.length; i++) {
       const r = json.results[i];
       const rp = `${p}.results[${i}]`;
+
       if (!isObject(r)) {
         issues.push(issue(rp, "Expected object"));
         continue;
       }
+
       requireField(r, "appPath", isString, rp, issues, "string");
       requireField(r, "ci", isObject, rp, issues, "object");
       if (isObject(r.ci)) {
@@ -266,9 +258,7 @@ export function checkManifestRefreshAll(json) {
   const issues = [];
   const p = "$";
 
-  if (!isObject(json)) {
-    return { ok: false, issues: [issue(p, "Expected object")] };
-  }
+  if (!isObject(json)) return { ok: false, issues: [issue(p, "Expected object")] };
 
   requireField(json, "ok", isBoolean, p, issues, "boolean");
   requireField(json, "rootPath", isString, p, issues, "string");
@@ -285,13 +275,67 @@ export function checkManifestRefreshAll(json) {
   return { ok: issues.length === 0, issues };
 }
 
+export function checkTemplatesInventory(json) {
+  const issues = [];
+  const p = "$";
+
+  if (!isObject(json)) return { ok: false, issues: [issue(p, "Expected object")] };
+
+  requireField(json, "ok", isBoolean, p, issues, "boolean");
+  requireField(json, "cmd", isString, p, issues, "string");
+  requireField(json, "templatesDir", isString, p, issues, "string");
+  requireField(json, "templatesCount", isNumber, p, issues, "number");
+  requireField(json, "templates", isArray, p, issues, "array");
+  optionalField(json, "notes", isArray, p, issues, "array");
+
+  if (isArray(json.templates)) {
+    for (let i = 0; i < json.templates.length; i++) {
+      const t = json.templates[i];
+      const tp = `${p}.templates[${i}]`;
+
+      if (!isObject(t)) {
+        issues.push(issue(tp, "Expected object"));
+        continue;
+      }
+
+      requireField(t, "id", isString, tp, issues, "string");
+      requireField(t, "ok", isBoolean, tp, issues, "boolean");
+      requireField(t, "error", isStringOrNull, tp, issues, "string|null");
+      requireField(t, "fileCount", isNumber, tp, issues, "number");
+      requireField(t, "totalBytes", isNumber, tp, issues, "number");
+      requireField(t, "templateHash", isString, tp, issues, "string");
+      requireField(t, "files", isArray, tp, issues, "array");
+
+      if (isArray(t.files)) {
+        for (let j = 0; j < t.files.length; j++) {
+          const f = t.files[j];
+          const fp = `${tp}.files[${j}]`;
+          if (!isObject(f)) {
+            issues.push(issue(fp, "Expected object"));
+            continue;
+          }
+          requireField(f, "path", isString, fp, issues, "string");
+          requireField(f, "bytes", isNumber, fp, issues, "number");
+          requireField(f, "sha256", isString, fp, issues, "string");
+        }
+      }
+    }
+  }
+
+  return { ok: issues.length === 0, issues };
+}
+
 /**
  * Registry: map "cmd name" => checker
  * We keep names aligned to CLI commands.
+ *
+ * IMPORTANT: This MUST be a NAMED export so other modules can do:
+ *   import { SCHEMA_CHECKERS } from "./ci-schemas.js"
  */
 export const SCHEMA_CHECKERS = Object.freeze({
   validate: checkValidate,
   "validate:all": checkValidateAll,
   "report:ci": checkReportCi,
   "manifest:refresh:all": checkManifestRefreshAll,
+  "templates:inventory": checkTemplatesInventory,
 });

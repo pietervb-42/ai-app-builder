@@ -135,9 +135,25 @@ Commands:
            [--refresh-manifests <never|after>] [--apply]
            [--contracts-dir <path>]
 
+  roadmap:status [--file <path>] [--json]
+  roadmap:update --step <n> (--done|--undone) [--focus <n>] [--file <path>] [--json]
+  roadmap:verify [--file <path>] [--strict true|false] [--json]
+  roadmap:auto [--file <path>] [--apply true|false] [--advance-focus true|false] [--focus <n>] [--json]
+
+  errors:list [--json]
+  examples:list [--json]
+
+Examples:
+  node index.js examples:list
+  node index.js examples:list --json
+
 CI convenience:
   --ci                 Alias for --json --quiet (accepted by all commands; removed before dispatch)
   --json-on-pipe true  If stdout is piped (not TTY), force --json
+
+Notes:
+  - In --json mode, stdout is exactly ONE machine JSON object per command.
+  - Human logs (if any) go to stderr.
 `.trim();
 }
 
@@ -255,6 +271,28 @@ async function main() {
       return;
     }
 
+    
+
+    if (cmd === "templates:inventory") {
+      const mod = await import("./src/templates.js");
+      const fn = pickExport(mod, ["templatesInventoryCommand"], "./src/templates.js");
+      const exitCode = await fn({ flags });
+      process.exit(typeof exitCode === "number" ? exitCode : 2);
+    }
+if (cmd === "errors:list") {
+      const mod = await import("./src/errors.js");
+      const fn = pickExport(mod, ["errorsListCommand"], "./src/errors.js");
+      const exitCode = await fn({ flags });
+      process.exit(typeof exitCode === "number" ? exitCode : 2);
+    }
+
+    if (cmd === "examples:list") {
+      const mod = await import("./src/examples.js");
+      const fn = pickExport(mod, ["examplesListCommand"], "./src/examples.js");
+      const exitCode = await fn({ flags });
+      process.exit(typeof exitCode === "number" ? exitCode : 2);
+    }
+
     if (cmd === "schema:check") {
       const mod = await import("./src/schema-check.js");
       const fn = pickExport(mod, ["schemaCheck"], "./src/schema-check.js");
@@ -286,6 +324,34 @@ async function main() {
     if (cmd === "ci:check") {
       const mod = await import("./src/ci-check.js");
       const fn = pickExport(mod, ["ciCheck"], "./src/ci-check.js");
+      const exitCode = await fn({ flags });
+      process.exit(typeof exitCode === "number" ? exitCode : 2);
+    }
+
+    if (cmd === "roadmap:status") {
+      const mod = await import("./src/roadmap.js");
+      const fn = pickExport(mod, ["roadmapStatusCommand"], "./src/roadmap.js");
+      const exitCode = await fn({ flags });
+      process.exit(typeof exitCode === "number" ? exitCode : 2);
+    }
+
+    if (cmd === "roadmap:update") {
+      const mod = await import("./src/roadmap.js");
+      const fn = pickExport(mod, ["roadmapUpdateCommand"], "./src/roadmap.js");
+      const exitCode = await fn({ flags });
+      process.exit(typeof exitCode === "number" ? exitCode : 2);
+    }
+
+    if (cmd === "roadmap:verify") {
+      const mod = await import("./src/roadmap.js");
+      const fn = pickExport(mod, ["roadmapVerifyCommand"], "./src/roadmap.js");
+      const exitCode = await fn({ flags });
+      process.exit(typeof exitCode === "number" ? exitCode : 2);
+    }
+
+    if (cmd === "roadmap:auto") {
+      const mod = await import("./src/roadmap.js");
+      const fn = pickExport(mod, ["roadmapAutoCommand"], "./src/roadmap.js");
       const exitCode = await fn({ flags });
       process.exit(typeof exitCode === "number" ? exitCode : 2);
     }
@@ -605,3 +671,4 @@ async function main() {
 }
 
 main();
+

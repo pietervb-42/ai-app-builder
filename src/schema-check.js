@@ -34,8 +34,53 @@ function writeJsonLine(obj) {
   process.stdout.write(JSON.stringify(obj) + "\n");
 }
 
+function safeString(x) {
+  if (x == null) return "";
+  return String(x);
+}
+
+function normalizeIssues(issues) {
+  const arr = Array.isArray(issues) ? issues : [];
+  const cleaned = [];
+
+  for (const it of arr) {
+    // Keep deterministic shape even if callers pass weird objects.
+    const p = safeString(it?.path);
+    const m = safeString(it?.message);
+    cleaned.push({ path: p, message: m });
+  }
+
+  // Deterministic ordering for CI snapshots:
+  // sort by path, then message.
+  cleaned.sort((a, b) => {
+    const ap = a.path;
+    const bp = b.path;
+    if (ap < bp) return -1;
+    if (ap > bp) return 1;
+    const am = a.message;
+    const bm = b.message;
+    if (am < bm) return -1;
+    if (am > bm) return 1;
+    return 0;
+  });
+
+  return cleaned;
+}
+
+function emitAndExit({ jsonMode, quiet, payload, exitCode }) {
+  // Per your global rule:
+  // --json => stdout is ONE machine JSON object only; stderr is human logs only.
+  // This command produces no human logs; errors are encoded in JSON output when json/quiet is set.
+  if (jsonMode || quiet) {
+    writeJsonLine(payload);
+  } else {
+    process.stdout.write(JSON.stringify(payload, null, 2) + "\n");
+  }
+  process.exit(exitCode);
+}
+
 export async function schemaCheck({ flags }) {
-  const json = hasFlag(flags, "json");
+  const jsonMode = hasFlag(flags, "json");
   const quiet = hasFlag(flags, "quiet");
 
   const cmdName = String(requireFlag(flags, "cmd"));
@@ -53,9 +98,7 @@ export async function schemaCheck({ flags }) {
       issues: [],
     };
 
-    if (json || quiet) writeJsonLine(payload);
-    else process.stdout.write(JSON.stringify(payload, null, 2) + "\n");
-    process.exit(2);
+    emitAndExit({ jsonMode, quiet, payload, exitCode: 2 });
   }
 
   const useStdin = isTrueish(flags.stdin);
@@ -72,9 +115,7 @@ export async function schemaCheck({ flags }) {
       issues: [],
     };
 
-    if (json || quiet) writeJsonLine(payload);
-    else process.stdout.write(JSON.stringify(payload, null, 2) + "\n");
-    process.exit(2);
+    emitAndExit({ jsonMode, quiet, payload, exitCode: 2 });
   }
 
   let raw = "";
@@ -98,14 +139,13 @@ export async function schemaCheck({ flags }) {
       issues: [],
     };
 
-    if (json || quiet) writeJsonLine(payload);
-    else process.stdout.write(JSON.stringify(payload, null, 2) + "\n");
-    process.exit(2);
+    emitAndExit({ jsonMode, quiet, payload, exitCode: 2 });
   }
 
   let parsed;
   try {
-    parsed = JSON.parse(String(raw || "").trim());
+    // Trim whitespace; if empty, JSON.parse will throw (correct).
+    parsed = JSON.parse(String(raw ?? "").trim());
   } catch (e) {
     const payload = {
       ok: false,
@@ -117,29 +157,23 @@ export async function schemaCheck({ flags }) {
       issues: [],
     };
 
-    if (json || quiet) writeJsonLine(payload);
-    else process.stdout.write(JSON.stringify(payload, null, 2) + "\n");
-    process.exit(2);
+    emitAndExit({ jsonMode, quiet, payload, exitCode: 2 });
   }
 
   const res = checker(parsed);
+  const issues = normalizeIssues(res?.issues);
+
   const payload = {
-    ok: Boolean(res.ok),
+    ok: Boolean(res?.ok),
     cmd: cmdName,
-    error: res.ok
+    error: res?.ok
       ? null
       : {
           code: "ERR_SCHEMA_FAIL",
           message: "Schema mismatch",
         },
-    issues: Array.isArray(res.issues) ? res.issues : [],
+    issues,
   };
 
-  if (json || quiet) {
-    writeJsonLine(payload);
-  } else {
-    process.stdout.write(JSON.stringify(payload, null, 2) + "\n");
-  }
-
-  process.exit(payload.ok ? 0 : 1);
+  emitAndExit({ jsonMode, quiet, payload, exitCode: payload.ok ? 0 : 1 });
 }

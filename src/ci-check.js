@@ -47,13 +47,15 @@ const CI_CHECK_HELP_TEXT = [
   "  --settle-ms <n>               Delay between schema targets (default: 200)",
   "  --timeout-ms <n>              Timeout per sub-command (default: 120000)",
   "",
+  "  --roadmap-file <path>         Roadmap file for roadmap:verify (default: ai/roadmap-45.md)",
+  "",
   "Help:",
   "  --help, -h                    Show this help and exit 0",
   "",
 ].join("\n");
 
 // strict json runner: expects a single JSON object on stdout
-async function runCliJson({ cmd, args, timeoutMs = 120000 }) {
+async function runCliJson({ cmd, args, timeoutMs = 120000, env = null }) {
   const node = process.execPath;
   const entry = path.resolve(process.cwd(), "index.js");
   const fullArgs = [entry, cmd, ...args];
@@ -63,7 +65,7 @@ async function runCliJson({ cmd, args, timeoutMs = 120000 }) {
       cwd: process.cwd(),
       stdio: ["ignore", "pipe", "pipe"],
       windowsHide: true,
-      env: { ...process.env, FORCE_COLOR: "0" },
+      env: env ? env : { ...process.env, FORCE_COLOR: "0" },
     });
 
     let stdout = "";
@@ -210,7 +212,7 @@ export async function ciCheck({ flags }) {
     ? String(flags["refresh-manifests"]).toLowerCase().trim()
     : "never";
 
-  // ✅ default to CI snapshot dir
+  // default to CI snapshot dir
   const contractsDir = flags["contracts-dir"] ? String(flags["contracts-dir"]) : "ci/contracts";
 
   const settleMs = safeNumber(flags["settle-ms"], 200);
@@ -225,6 +227,54 @@ export async function ciCheck({ flags }) {
     typeof baseTimeoutMs === "number" && Number.isFinite(baseTimeoutMs)
       ? Math.max(baseTimeoutMs, contractTimeoutFloorMs)
       : contractTimeoutFloorMs;
+
+  // ---- Phase 0: roadmap:verify (strict) ----
+  const roadmapFile = flags["roadmap-file"] ? String(flags["roadmap-file"]) : "ai/roadmap-45.md";
+
+  if (progress) out.log(`[ci:check] roadmap roadmap:verify (strict) ${roadmapFile}`);
+
+  const roadmapArgs = ["--json", "--strict", "true", "--file", roadmapFile];
+  const roadmapRes = await runCliJson({ cmd: "roadmap:verify", args: roadmapArgs, timeoutMs: baseTimeoutMs });
+
+  if (!roadmapRes.json) {
+    const finishedAt = new Date().toISOString();
+    const payload = {
+      ok: false,
+      rootPath: path.resolve(root),
+      startedAt,
+      finishedAt,
+      error:
+        roadmapRes.error || { code: "ERR_ROADMAP_RUNNER", message: "roadmap:verify runner error" },
+      roadmap: null,
+      schema: null,
+      contracts: null,
+    };
+    if (json) out.emitJson(payload);
+    else out.log(`[ci:check] ERROR: ${payload.error.message}`);
+    return 2;
+  }
+
+  // roadmap:verify exit codes: 0 pass, 1 fail, 2 runtime, 3 not found
+  if (roadmapRes.exitCode !== 0 || (roadmapRes.json && roadmapRes.json.ok !== true)) {
+    const finishedAt = new Date().toISOString();
+    const payload = {
+      ok: false,
+      rootPath: path.resolve(root),
+      startedAt,
+      finishedAt,
+      error: {
+        code: "ERR_ROADMAP_VERIFY_FAIL",
+        message: "roadmap:verify failed",
+        exitCode: roadmapRes.exitCode,
+      },
+      roadmap: roadmapRes.json,
+      schema: null,
+      contracts: null,
+    };
+    if (json) out.emitJson(payload);
+    else out.log(`[ci:check] roadmap FAIL`);
+    return 1;
+  }
 
   // ---- Phase 1: schema:check for validate:all + report:ci + manifest:refresh:all ----
   const schemaResults = [];
@@ -372,6 +422,7 @@ export async function ciCheck({ flags }) {
       startedAt,
       finishedAt,
       error: schemaRunnerError,
+      roadmap: roadmapRes.json,
       schema: {
         ok: false,
         failCount: schemaFailCount,
@@ -392,6 +443,7 @@ export async function ciCheck({ flags }) {
       startedAt,
       finishedAt,
       error: { code: "ERR_SCHEMA_FAIL", message: "Schema mismatch" },
+      roadmap: roadmapRes.json,
       schema: {
         ok: false,
         failCount: schemaFailCount,
@@ -424,6 +476,10 @@ export async function ciCheck({ flags }) {
     // CI safety + snapshot stability for manifest:refresh:all
     "--apply",
     "false",
+
+    // Step 33: request CI semantics (may be ignored by arg whitelist)
+    "--ci",
+    "true",
   ];
 
   if (noInstall) contractArgs.push("--no-install");
@@ -435,10 +491,15 @@ export async function ciCheck({ flags }) {
   if (progress) contractArgs.push("--progress");
   if (healManifest) contractArgs.push("--heal-manifest");
 
+  // Step 33 hardening: force env.CI for the spawned contract:run process.
+  // This guarantees contract snapshots are locked deterministically in CI-mode.
+  const contractEnv = { ...process.env, FORCE_COLOR: "0", CI: "1" };
+
   const contractRes = await runCliJson({
     cmd: "contract:run",
     args: contractArgs,
     timeoutMs: contractTimeoutMs,
+    env: contractEnv,
   });
 
   if (!contractRes.json) {
@@ -450,6 +511,7 @@ export async function ciCheck({ flags }) {
       finishedAt,
       error:
         contractRes.error || { code: "ERR_CONTRACT_RUNNER", message: "contract:run runner error" },
+      roadmap: roadmapRes.json,
       schema: {
         ok: true,
         failCount: 0,
@@ -473,6 +535,7 @@ export async function ciCheck({ flags }) {
     rootPath: path.resolve(root),
     startedAt,
     finishedAt,
+    roadmap: roadmapRes.json,
     schema: {
       ok: true,
       failCount: 0,

@@ -4,7 +4,7 @@ import path from "path";
 import { spawn } from "child_process";
 
 import { createOutput } from "./output.js";
-import { SCHEMA_CHECKERS } from "./schemas.js";
+import { SCHEMA_CHECKERS } from "./ci-schemas.js";
 
 import {
   normalizeForContract,
@@ -271,8 +271,7 @@ server.listen(port, "127.0.0.1", () => {});
         });
         const raw = fs.readFileSync(manifestPath, "utf8");
         const parsed = JSON.parse(raw);
-        parsed.fingerprint =
-          String(fingerprint).slice(0, 10) + "deadbeefdeadbeefdeadbeefdeadbeef";
+        parsed.fingerprint = String(fingerprint).slice(0, 10) + "deadbeefdeadbeefdeadbeefdeadbeef";
         writeJsonFileAbs(manifestPath, parsed);
       },
       validateFlags: { installMode: "never" },
@@ -311,14 +310,33 @@ server.listen(port, "127.0.0.1", () => {});
   }));
 }
 
-export async function contractRun({ flags }) {
-  const root = String(requireFlag(flags, "root"));
+function detectCi({ flags }) {
+  // Explicit CLI flag wins; fallback to env CI.
+  if (hasFlag(flags, "ci")) return true;
+  return isTrueish(process.env.CI);
+}
 
+export async function contractRun({ flags }) {
   const json = hasFlag(flags, "json");
   const quiet = hasFlag(flags, "quiet") || Boolean(json);
   const progress = hasFlag(flags, "progress");
 
   const out = createOutput({ json: Boolean(json), quiet: Boolean(quiet) });
+
+  let root;
+  try {
+    root = String(requireFlag(flags, "root"));
+  } catch (e) {
+    const payload = {
+      ok: false,
+      startedAt: null,
+      finishedAt: null,
+      error: { code: "ERR_CONTRACT_INPUT", message: String(e?.message || e) },
+    };
+    if (json) out.emitJson(payload);
+    else out.log(`[contract:run] ERROR: ${payload.error.message}`);
+    return 2;
+  }
 
   const noInstall = hasFlag(flags, "no-install");
   const installMode = normalizeInstallModeFlag(flags["install-mode"]);
@@ -341,18 +359,54 @@ export async function contractRun({ flags }) {
     : "check";
 
   const allowUpdate = hasFlag(flags, "allow-update");
+  const isCi = detectCi({ flags });
 
-  // 🔒 WARNING-ONLY GUARD (explicit intent)
-  if (contractsMode === "update" && !allowUpdate && !quiet) {
-    process.stderr.write(
-      "[contract:run] WARNING: --contracts-mode update will overwrite contract snapshots.\n" +
-        "               This is an intentional mutation of CI truth.\n" +
-        "               Re-run with --allow-update to acknowledge intent.\n"
-    );
+  // Step 33: Golden snapshot lock.
+  // - In CI: NEVER allow update.
+  // - Locally: update requires explicit --allow-update acknowledgement.
+  if (doContracts && contractsMode === "update") {
+    if (isCi) {
+      const payload = {
+        ok: false,
+        rootPath: path.resolve(root),
+        startedAt: null,
+        finishedAt: null,
+        error: {
+          code: "ERR_CONTRACT_LOCKED_CI",
+          message:
+            "Contract snapshots are locked in CI (Step 33). Refusing --contracts-mode update.",
+        },
+      };
+      if (json) out.emitJson(payload);
+      else out.log(`[contract:run] ERROR: ${payload.error.message}`);
+      return 2;
+    }
+
+    if (!allowUpdate) {
+      const payload = {
+        ok: false,
+        rootPath: path.resolve(root),
+        startedAt: null,
+        finishedAt: null,
+        error: {
+          code: "ERR_CONTRACT_UPDATE_REQUIRES_ACK",
+          message:
+            "Refusing to update contract snapshots without explicit acknowledgement. Re-run with --allow-update.",
+        },
+      };
+      if (json) out.emitJson(payload);
+      else {
+        out.log(
+          "[contract:run] Refusing --contracts-mode update without --allow-update.\n" +
+            "              This would overwrite golden snapshots.\n" +
+            "              Re-run with --allow-update to acknowledge intent."
+        );
+      }
+      return 2;
+    }
   }
 
   const settleMs = safeNumber(flags["settle-ms"], 0);
-
   const startedAt = new Date().toISOString();
 
   const results = [];
@@ -379,6 +433,7 @@ export async function contractRun({ flags }) {
 
   // Commands:
   // - Keep existing gates first
+  // - Add templates:inventory (repo deterministic)
   // - Then add validate fixture cases, each with its own snapshot key
   const runList = [
     {
@@ -414,6 +469,13 @@ export async function contractRun({ flags }) {
       },
       hardGate: true,
     },
+    {
+      cmd: "templates:inventory",
+      schemaCmd: "templates:inventory",
+      snapshotKey: "templates:inventory",
+      args: () => ["--json"],
+      hardGate: true,
+    },
     // Fixture validate cases (contract-locked diagnostics)
     ...fixtureCases.map((fx) => ({
       cmd: "validate",
@@ -425,7 +487,6 @@ export async function contractRun({ flags }) {
         if (fx.validateFlags?.installMode) {
           a.push("--install-mode", String(fx.validateFlags.installMode));
         }
-        // No profile override for fixtures (they are not template-driven).
         return a;
       },
       hardGate: true,
@@ -442,7 +503,6 @@ export async function contractRun({ flags }) {
 
     const runRoot = rootForItem(item.snapshotKey);
     const argvTail = typeof item.args === "function" ? item.args(runRoot) : [];
-
     const args = [entry, item.cmd, ...argvTail];
 
     const res = await new Promise((resolve) => {
@@ -530,8 +590,6 @@ export async function contractRun({ flags }) {
     }
 
     // ---- fixture expectation check (diagnostics) ----
-    // This is a deterministic diagnostic lock (error-code contract) and MUST gate CI.
-    // If expectation fails, contract:run must return non-zero even if the JSON snapshot matches.
     let expectation = null;
     if (item.cmd === "validate" && item.expectedDiagnosticCode && res.json) {
       const code =
@@ -554,7 +612,7 @@ export async function contractRun({ flags }) {
      * - schema is ok, AND
      * - contract snapshot matches (golden output agreed)
      *
-     * This allows deterministic failures to be “locked” and verified.
+     * This allows deterministic failures to be "locked" and verified.
      *
      * HOWEVER:
      * - Diagnostic expectation failures MUST still gate (they are semantic contracts).
@@ -564,10 +622,7 @@ export async function contractRun({ flags }) {
     const shouldCountCmdFail =
       item.hardGate &&
       nonzeroExit &&
-      // If we are NOT doing contracts, exit code must gate.
-      (!doContracts ||
-        // If we ARE doing contracts, only gate when contracts don't match (or no contract info).
-        contractMatch !== true);
+      (!doContracts || contractMatch !== true);
 
     if (shouldCountCmdFail) cmdFailCount++;
 
@@ -623,6 +678,7 @@ export async function contractRun({ flags }) {
       contractsMode,
       contractsDir: path.resolve(contractsDir),
       fixturesDir: fixturesBaseAbs,
+      ci: Boolean(isCi),
       contractRoots: {
         defaultRoot: path.resolve(root),
         fixedRoot: fixedContractRootAbs,
@@ -638,5 +694,6 @@ export async function contractRun({ flags }) {
   // Exit codes:
   // 0: ok
   // 1: contract/schema/command/expectation gating failed
+  // 2: input/runtime refusal (e.g. CI lock / missing required flags)
   return ok ? 0 : 1;
 }
