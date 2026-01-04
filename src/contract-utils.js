@@ -31,6 +31,31 @@ function looksLikePathString(s) {
   return false;
 }
 
+function looksLikeLocalhostUrl(s) {
+  if (typeof s !== "string") return false;
+  const t = s.trim();
+  if (!t) return false;
+  // Matches:
+  // - http://localhost:1234/...
+  // - https://localhost:1234/...
+  // - http://127.0.0.1:1234/...
+  // - http://[::1]:1234/...
+  return /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?(\/|$)/i.test(t);
+}
+
+function looksLikeHexHashString(s) {
+  if (typeof s !== "string") return false;
+  const t = s.trim();
+  if (!t) return false;
+
+  // Common hash lengths: 32 (md5), 40 (sha1), 64 (sha256), 128 (sha512 hex)
+  // We accept a range to catch other digests too.
+  if (!/^[a-f0-9]+$/i.test(t)) return false;
+  if (t.length < 24) return false;
+  if (t.length > 256) return false;
+  return true;
+}
+
 function shouldNormalizeKeyAsPath(key) {
   const k = String(key || "");
   if (!k) return false;
@@ -57,17 +82,51 @@ function shouldNormalizeKeyAsTimestamp(key) {
 function shouldNormalizeKeyAsPortOrDuration(key) {
   const k = String(key || "");
   if (!k) return false;
+
+  // Explicit known volatile numeric fields
   if (k === "port") return true;
   if (k === "durationMs") return true;
   if (k === "uptimeSeconds") return true;
+
+  // Common timing keys in nested probe results
+  if (k === "ms") return true;
+  if (k.endsWith("Ms")) return true; // e.g. elapsedMs, bootMs
+  if (k.endsWith("Seconds")) return true; // e.g. xyzSeconds
+
   return false;
 }
 
 function shouldNormalizeKeyAsUrl(key) {
   const k = String(key || "");
   if (!k) return false;
+
+  // Explicit known volatile URL fields
   if (k === "url") return true;
   if (k === "baseUrl") return true;
+
+  // Nested probe URLs drift because the port changes each run
+  if (k === "probeUrl") return true;
+
+  return false;
+}
+
+function shouldNormalizeKeyAsFingerprintOrHash(key) {
+  const k = String(key || "").toLowerCase().trim();
+  if (!k) return false;
+
+  // Explicit keys used in this repo
+  if (k === "fingerprint") return true;
+  if (k === "currentfingerprint") return true;
+  if (k === "expectedfingerprint") return true;
+
+  // Generic patterns
+  if (k.includes("fingerprint")) return true;
+  if (k.includes("checksum")) return true;
+  if (k.includes("sha")) return true;
+  if (k.includes("md5")) return true;
+  if (k.endsWith("hash")) return true;
+  if (k.includes("hash")) return true;
+
   return false;
 }
 
@@ -90,16 +149,25 @@ function normalizeInPlace(node) {
       continue;
     }
 
+    // Paths are always volatile (machine-specific).
     if (shouldNormalizeKeyAsPath(key) && typeof val === "string") {
       node[key] = "<PATH>";
       continue;
     }
 
+    // URLs are volatile due to local ports.
     if (shouldNormalizeKeyAsUrl(key) && typeof val === "string") {
       node[key] = "";
       continue;
     }
 
+    // Also normalize any localhost-ish URLs even if the key isn't known.
+    if (typeof val === "string" && looksLikeLocalhostUrl(val)) {
+      node[key] = "";
+      continue;
+    }
+
+    // Ports/durations are volatile.
     if (shouldNormalizeKeyAsPortOrDuration(key) && typeof val === "number") {
       node[key] = 0;
       continue;
@@ -109,18 +177,43 @@ function normalizeInPlace(node) {
       continue;
     }
 
-    if (shouldNormalizeKeyAsTimestamp(key) && typeof val === "string") {
-      node[key] = looksLikeIsoDateString(val) ? null : null;
+    // Fingerprints/hashes drift with file ordering, line endings, environment, etc.
+    if (shouldNormalizeKeyAsFingerprintOrHash(key) && typeof val === "string") {
+      node[key] = "<HASH>";
       continue;
     }
 
+    /**
+     * IMPORTANT:
+     * Contract timestamps MUST be deterministic.
+     * We normalize timestamp-keys UNCONDITIONALLY to null for any primitive.
+     */
+    if (
+      shouldNormalizeKeyAsTimestamp(key) &&
+      (typeof val === "string" ||
+        typeof val === "number" ||
+        typeof val === "boolean" ||
+        val === null)
+    ) {
+      node[key] = null;
+      continue;
+    }
+
+    // Also normalize any ISO-like strings even if the key isn't known.
     if (typeof val === "string" && looksLikeIsoDateString(val)) {
       node[key] = null;
       continue;
     }
 
+    // Any absolute-ish path string should be normalized.
     if (typeof val === "string" && looksLikePathString(val)) {
       node[key] = "<PATH>";
+      continue;
+    }
+
+    // Catch hash-like strings even if the key isn't known (last resort).
+    if (typeof val === "string" && looksLikeHexHashString(val)) {
+      node[key] = "<HASH>";
       continue;
     }
   }

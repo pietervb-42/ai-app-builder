@@ -65,6 +65,79 @@ function normalizeInstallModeFlag(v) {
   return undefined;
 }
 
+async function runCmdJson({ cmd, args }) {
+  const node = process.execPath;
+  const entry = path.resolve(process.cwd(), "index.js");
+  const fullArgs = [entry, cmd, ...args];
+
+  return new Promise((resolve) => {
+    const child = spawn(node, fullArgs, {
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
+      env: { ...process.env, FORCE_COLOR: "0" },
+    });
+
+    let stdout = "";
+    let stderr = "";
+
+    child.stdout.on("data", (d) => (stdout += d.toString("utf8")));
+    child.stderr.on("data", (d) => (stderr += d.toString("utf8")));
+
+    child.on("close", (code) => {
+      const exitCode = typeof code === "number" ? code : 2;
+      const outTrim = stdout.trim();
+      const errTrim = stderr.trim() || "";
+
+      if (!outTrim) {
+        resolve({
+          ok: false,
+          exitCode,
+          json: null,
+          error: {
+            code: "ERR_CMD_NO_STDOUT",
+            message: `${cmd} produced no stdout JSON`,
+            cmd,
+            stderr: errTrim || null,
+          },
+        });
+        return;
+      }
+
+      try {
+        const parsed = JSON.parse(outTrim);
+        resolve({
+          ok: exitCode === 0,
+          exitCode,
+          json: parsed,
+          error:
+            exitCode === 0
+              ? null
+              : {
+                  code: "ERR_CMD_NONZERO",
+                  message: `${cmd} exited non-zero (${exitCode})`,
+                  cmd,
+                  stderr: errTrim || null,
+                },
+        });
+      } catch (e) {
+        resolve({
+          ok: false,
+          exitCode,
+          json: null,
+          error: {
+            code: "ERR_CMD_BAD_JSON",
+            message: `${cmd} stdout was not valid JSON`,
+            cmd,
+            parseError: String(e?.message || e),
+            stdout: outTrim.slice(0, 2000),
+            stderr: errTrim || null,
+          },
+        });
+      }
+    });
+  });
+}
+
 export async function contractRun({ flags }) {
   const root = String(requireFlag(flags, "root"));
 
@@ -87,7 +160,13 @@ export async function contractRun({ flags }) {
     ? String(flags["refresh-manifests"]).toLowerCase().trim()
     : "never";
 
+  const apply =
+    flags.apply != null && flags.apply !== true
+      ? String(flags.apply).toLowerCase().trim() === "true"
+      : false;
+
   const doContracts = isTrueish(flags.contracts);
+
   const contractsDir = flags["contracts-dir"]
     ? String(flags["contracts-dir"])
     : "ci/contracts";
@@ -98,12 +177,13 @@ export async function contractRun({ flags }) {
 
   const allowUpdate = hasFlag(flags, "allow-update");
 
-  // 🔒 WARNING-ONLY GUARD (explicit intent)
-  if (contractsMode === "update" && !allowUpdate && !quiet) {
+  // Hard guard: prevent accidental update
+  const effectiveMode =
+    contractsMode === "update" && allowUpdate ? "update" : "check";
+
+  if (contractsMode === "update" && effectiveMode !== "update" && !quiet) {
     process.stderr.write(
-      "[contract:run] WARNING: --contracts-mode update will overwrite contract snapshots.\n" +
-      "               This is an intentional mutation of CI truth.\n" +
-      "               Re-run with --allow-update to acknowledge intent.\n"
+      "[contract:run] Refusing --contracts-mode update without --allow-update.\n"
     );
   }
 
@@ -144,62 +224,94 @@ export async function contractRun({ flags }) {
       },
       hardGate: true,
     },
+    {
+      cmd: "manifest:refresh:all",
+      args: () => {
+        const a = ["--root", root];
+        if (apply) a.push("--apply");
+        if (profile) a.push("--templateDir", String(profile));
+        if (include) a.push("--include", include);
+        if (typeof max === "number") a.push("--max", String(max));
+        if (progress) a.push("--progress");
+        // This command should be schema-checked too (it can drift)
+        a.push("--json", "--quiet");
+        return a;
+      },
+      hardGate: false,
+      enabled: refreshManifests === "after",
+    },
   ];
 
   for (const item of runList) {
-    const node = process.execPath;
-    const entry = path.resolve(process.cwd(), "index.js");
-    const args = [entry, item.cmd, ...item.args()];
+    if (item.enabled === false) continue;
 
-    const res = await new Promise((resolve) => {
-      const child = spawn(node, args, {
-        stdio: ["ignore", "pipe", "pipe"],
-        windowsHide: true,
-      });
+    if (progress) out.log(`[contract:run] run ${item.cmd}`);
 
-      let stdout = "";
-      child.stdout.on("data", (d) => (stdout += d.toString()));
-      child.on("close", (code) => {
-        let jsonOut = null;
-        try {
-          jsonOut = JSON.parse(stdout.trim());
-        } catch {}
-        resolve({ code, json: jsonOut });
-      });
-    });
+    const cmdRes = await runCmdJson({ cmd: item.cmd, args: item.args() });
 
-    const schema = res.json
-      ? SCHEMA_CHECKERS[item.cmd]?.(res.json) ?? { ok: false, issues: [] }
+    const schema = cmdRes.json
+      ? SCHEMA_CHECKERS[item.cmd]?.(cmdRes.json) ?? { ok: false, issues: ["no-checker"] }
       : { ok: false, issues: ["no-json"] };
 
     if (!schema.ok) schemaFailCount++;
-    if (res.code !== 0 && item.hardGate) cmdFailCount++;
+    if (cmdRes.exitCode !== 0 && item.hardGate) cmdFailCount++;
 
     let contract = null;
-    if (doContracts && res.json) {
-      if (contractsMode === "update") {
-        contract = writeSnapshotFile(
-          snapshotPathFor({ contractsDir, cmd: item.cmd }),
-          normalizeForContract(item.cmd, res.json)
-        );
+
+    if (doContracts && cmdRes.json) {
+      const snapPath = snapshotPathFor({ contractsDir, cmd: item.cmd });
+
+      if (effectiveMode === "update") {
+        const normalized = normalizeForContract(item.cmd, cmdRes.json);
+        writeSnapshotFile(snapPath, normalized);
+        contract = {
+          mode: "update",
+          snapshot: path.resolve(snapPath),
+          updated: true,
+          match: true,
+          diffSummary: null,
+        };
       } else {
-        const snap = readSnapshotFile(
-          snapshotPathFor({ contractsDir, cmd: item.cmd })
-        );
-        const cmp = compareNormalized(
-          snap.value,
-          normalizeForContract(item.cmd, res.json)
-        );
-        if (!cmp.ok) contractFailCount++;
+        try {
+          const snap = readSnapshotFile(snapPath);
+          const normalized = normalizeForContract(item.cmd, cmdRes.json);
+          const cmp = compareNormalized(snap.value, normalized);
+          if (!cmp.ok) contractFailCount++;
+          contract = {
+            mode: "check",
+            snapshot: snap.abs,
+            match: Boolean(cmp.ok),
+            diffSummary: cmp.ok ? null : cmp.summary,
+          };
+        } catch (e) {
+          contractFailCount++;
+          contract = {
+            mode: "check",
+            snapshot: path.resolve(snapPath),
+            match: false,
+            diffSummary: {
+              kind: "missing_snapshot",
+              message: String(e?.message || e),
+            },
+          };
+        }
       }
     }
 
     results.push({
       cmd: item.cmd,
-      exitCode: res.code,
+      exitCode: cmdRes.exitCode,
+      runError: cmdRes.error,
       schema,
       contract,
     });
+
+    if (item.hardGate && (cmdRes.exitCode !== 0 || !schema.ok)) {
+      break;
+    }
+
+    // small settle to reduce port races
+    await sleep(50);
   }
 
   const ok = schemaFailCount === 0 && contractFailCount === 0 && cmdFailCount === 0;
