@@ -21,8 +21,8 @@
         {
           "class": "HEALTH_FAIL",
           "details": {
-            "code": "ERR_HEALTH_TIMEOUT",
-            "message": "fetch failed",
+            "code": "ERR_HEALTH_CONNREFUSED",
+            "message": "connect ECONNREFUSED 127.0.0.1:50745",
             "url": ""
           },
           "id": "health",
