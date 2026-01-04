@@ -3,6 +3,10 @@ import fs from "fs/promises";
 import path from "path";
 import { validateAppCore } from "./validate.js";
 import { createOutput } from "./output.js";
+import {
+  exitCodeForFailureClass,
+  ValidationClass,
+} from "../lib/validate/classes.js";
 
 const MANIFEST_NAME = "builder.manifest.json";
 
@@ -48,6 +52,16 @@ async function writeJsonFile(outPath, data) {
 
 function toIso() {
   return new Date().toISOString();
+}
+
+function oneLine(s) {
+  const t = String(s ?? "").replace(/\r?\n/g, " ").trim();
+  return t;
+}
+
+function shortMessage(s, max = 220) {
+  const t = oneLine(s);
+  return t.length > max ? t.slice(0, max) : t;
 }
 
 function normalizeInstallMode({ installMode, noInstall }) {
@@ -112,11 +126,7 @@ export async function validateAll({
 
     if (progress) {
       // Always stderr; respect quiet, but allow progress when requested.
-      if (effectiveQuiet) {
-        out.log(`[validate:all] ${i + 1}/${appPaths.length} ${appPath}`);
-      } else {
-        out.log(`[validate:all] ${i + 1}/${appPaths.length} ${appPath}`);
-      }
+      out.log(`[validate:all] ${i + 1}/${appPaths.length} ${appPath}`);
     }
 
     try {
@@ -132,6 +142,11 @@ export async function validateAll({
       results.push(result);
       if (exitCode > maxExitCode) maxExitCode = exitCode;
     } catch (e) {
+      // Deterministic classification: batch wrapper crash is BOOT_FAIL.
+      const failureClass = ValidationClass.BOOT_FAIL;
+      const exitCode = exitCodeForFailureClass(failureClass);
+
+      const msg = shortMessage(e?.message ?? e);
       const crash = {
         ok: false,
         appPath,
@@ -151,16 +166,21 @@ export async function validateAll({
               id: "validate_all_crash",
               required: true,
               ok: false,
-              class: "UNKNOWN_FAIL",
-              details: { error: String(e?.message ?? e) },
+              class: failureClass,
+              details: {
+                code:
+                  (e && typeof e === "object" && typeof e.code === "string" && e.code) ||
+                  "ERR_VALIDATE_ALL_EXCEPTION",
+                message: msg || "validate:all wrapper threw an exception.",
+              },
             },
           ],
-          failureClass: "UNKNOWN_FAIL",
+          failureClass,
         },
       };
 
       results.push(crash);
-      if (maxExitCode < 1) maxExitCode = 1;
+      if (exitCode > maxExitCode) maxExitCode = exitCode;
     }
   }
 

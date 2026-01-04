@@ -358,6 +358,7 @@ export async function contractRun({ flags }) {
   let schemaFailCount = 0;
   let contractFailCount = 0;
   let cmdFailCount = 0;
+  let expectationFailCount = 0;
 
   // --- Diagnostics fixtures (deterministic local apps) ---
   // Lives outside outputs root; does not affect validate:all enumeration.
@@ -513,8 +514,8 @@ export async function contractRun({ flags }) {
     }
 
     // ---- fixture expectation check (diagnostics) ----
-    // This does NOT affect schema; it’s a contract-level expectation only.
-    // We only hard-gate when contracts are enabled and snapshot does NOT match.
+    // This is a deterministic diagnostic lock (error-code contract) and MUST gate CI.
+    // If expectation fails, contract:run must return non-zero even if the JSON snapshot matches.
     let expectation = null;
     if (item.cmd === "validate" && item.expectedDiagnosticCode && res.json) {
       const code =
@@ -527,6 +528,8 @@ export async function contractRun({ flags }) {
         actual: code,
         ok: code === item.expectedDiagnosticCode,
       };
+
+      if (!expectation.ok) expectationFailCount++;
     }
 
     /**
@@ -536,6 +539,9 @@ export async function contractRun({ flags }) {
      * - contract snapshot matches (golden output agreed)
      *
      * This allows deterministic failures to be “locked” and verified.
+     *
+     * HOWEVER:
+     * - Diagnostic expectation failures MUST still gate (they are semantic contracts).
      */
     const nonzeroExit = res.exitCode !== 0;
 
@@ -572,7 +578,11 @@ export async function contractRun({ flags }) {
     if (settleMs > 0) await sleep(settleMs);
   }
 
-  const ok = schemaFailCount === 0 && contractFailCount === 0 && cmdFailCount === 0;
+  const ok =
+    schemaFailCount === 0 &&
+    contractFailCount === 0 &&
+    cmdFailCount === 0 &&
+    expectationFailCount === 0;
 
   const payload = {
     ok,
@@ -583,6 +593,7 @@ export async function contractRun({ flags }) {
       schemaFailCount,
       contractFailCount,
       cmdFailCount,
+      expectationFailCount,
     },
     knobs: {
       refreshManifests,
@@ -605,6 +616,6 @@ export async function contractRun({ flags }) {
 
   // Exit codes:
   // 0: ok
-  // 1: contract/schema/command gating failed
+  // 1: contract/schema/command/expectation gating failed
   return ok ? 0 : 1;
 }

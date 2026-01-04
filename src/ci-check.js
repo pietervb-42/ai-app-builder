@@ -161,7 +161,8 @@ export async function ciCheck({ flags }) {
     ? String(flags["refresh-manifests"]).toLowerCase().trim()
     : "never";
 
-  const contractsDir = flags["contracts-dir"] ? String(flags["contracts-dir"]) : "contracts";
+  // ✅ default to CI snapshot dir
+  const contractsDir = flags["contracts-dir"] ? String(flags["contracts-dir"]) : "ci/contracts";
 
   const settleMs = safeNumber(flags["settle-ms"], 200);
   const timeoutMs = safeNumber(flags["timeout-ms"], 120000);
