@@ -221,6 +221,9 @@ export async function ciCheck({ flags }) {
   let schemaFailCount = 0;
   let schemaRunnerError = null;
 
+  // If any producer exits non-zero, ci:check must fail with THAT exit code.
+  let firstProducerNonzeroExit = null;
+
   // Option A: include manifest:refresh:all in the schema gate too
   const schemaTargets = ["validate:all", "report:ci", "manifest:refresh:all"];
 
@@ -246,6 +249,7 @@ export async function ciCheck({ flags }) {
 
     const produced = await runCliJson({ cmd: target, args: producerArgs, timeoutMs });
 
+    // Runner-level failure (no JSON / timed out / bad JSON etc.)
     if (!produced.json) {
       schemaRunnerError =
         produced.error || {
@@ -259,6 +263,27 @@ export async function ciCheck({ flags }) {
         runError: schemaRunnerError,
         schema: null,
       });
+      break;
+    }
+
+    // ✅ CRITICAL: if producer exited non-zero, CI must fail immediately.
+    if (produced.exitCode !== 0) {
+      if (firstProducerNonzeroExit == null) firstProducerNonzeroExit = produced.exitCode;
+      schemaFailCount++;
+
+      schemaResults.push({
+        cmd: target,
+        ok: false,
+        exitCode: produced.exitCode,
+        runError:
+          produced.error || {
+            code: "ERR_RUN_NONZERO",
+            message: `Non-zero exit (${produced.exitCode})`,
+            cmd: target,
+          },
+        schema: null,
+      });
+
       break;
     }
 
@@ -370,12 +395,26 @@ export async function ciCheck({ flags }) {
 
   if (schemaFailCount > 0) {
     const finishedAt = new Date().toISOString();
+
+    // If we failed because a producer exited non-zero, propagate that exit code (e.g. 13).
+    const propagatedExit =
+      typeof firstProducerNonzeroExit === "number" && Number.isFinite(firstProducerNonzeroExit)
+        ? firstProducerNonzeroExit
+        : 1;
+
     const payload = {
       ok: false,
       rootPath: path.resolve(root),
       startedAt,
       finishedAt,
-      error: { code: "ERR_SCHEMA_FAIL", message: "Schema mismatch" },
+      error:
+        propagatedExit !== 1
+          ? {
+              code: "ERR_SCHEMA_PRODUCER_NONZERO",
+              message: `Schema gate producer exited non-zero (${propagatedExit})`,
+              exitCode: propagatedExit,
+            }
+          : { code: "ERR_SCHEMA_FAIL", message: "Schema mismatch" },
       schema: {
         ok: false,
         failCount: schemaFailCount,
@@ -383,9 +422,11 @@ export async function ciCheck({ flags }) {
       },
       contracts: null,
     };
+
     if (json) out.emitJson(payload);
     else out.log(`[ci:check] schema FAIL`);
-    return 1;
+
+    return propagatedExit;
   }
 
   // ---- Phase 2: contract:run (mode check) ----
