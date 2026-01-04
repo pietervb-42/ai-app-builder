@@ -22,6 +22,36 @@ function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+const CI_CHECK_HELP_TEXT = [
+  "Usage:",
+  "  node index.js ci:check --root <dir> [options]",
+  "",
+  "Required:",
+  "  --root <dir>                 Root directory containing generated outputs",
+  "",
+  "Options:",
+  "  --json                        Emit ONE JSON object to stdout",
+  "  --quiet                       Reduce human logs (implied by --json)",
+  "  --progress                    Print progress logs to stderr",
+  "",
+  "  --contracts-dir <dir>         Contract snapshots directory (default: ci/contracts)",
+  "  --refresh-manifests <mode>    Pass-through to contract:run (default: never)",
+  "",
+  "  --no-install                  Pass-through to underlying commands",
+  "  --install-mode <mode>         Pass-through to underlying commands",
+  "  --profile <name>              Pass-through filter",
+  "  --include <pattern>           Pass-through filter",
+  "  --max <n>                     Pass-through limit",
+  "  --heal-manifest               Pass-through (report:ci + contract:run)",
+  "",
+  "  --settle-ms <n>               Delay between schema targets (default: 200)",
+  "  --timeout-ms <n>              Timeout per sub-command (default: 120000)",
+  "",
+  "Help:",
+  "  --help, -h                    Show this help and exit 0",
+  "",
+].join("\n");
+
 // strict json runner: expects a single JSON object on stdout
 async function runCliJson({ cmd, args, timeoutMs = 120000 }) {
   const node = process.execPath;
@@ -133,6 +163,25 @@ export async function ciCheck({ flags }) {
   const out = createOutput({ json: Boolean(json), quiet: Boolean(quiet) });
 
   const startedAt = new Date().toISOString();
+
+  // ---- Help must short-circuit BEFORE required flag validation ----
+  const wantsHelp = hasFlag(flags, "help") || hasFlag(flags, "h");
+  if (wantsHelp) {
+    const finishedAt = new Date().toISOString();
+    if (json) {
+      out.emitJson({
+        ok: true,
+        startedAt,
+        finishedAt,
+        help: true,
+        usage: CI_CHECK_HELP_TEXT,
+      });
+    } else {
+      // Help is human output; keep it on stderr via out.log()
+      out.log(CI_CHECK_HELP_TEXT);
+    }
+    return 0;
+  }
 
   let root;
   try {
