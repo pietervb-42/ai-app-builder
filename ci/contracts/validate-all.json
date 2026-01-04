@@ -11,245 +11,8 @@
         "didInstall": true,
         "installMode": "always",
         "manifestIntegrity": {
-          "currentFingerprint": "1e357eccf977a56a5d0c2ee4c1d50ff637f8e793b32118808f26b667a8806aee",
-          "expectedFingerprint": "1e357eccf977a56a5d0c2ee4c1d50ff637f8e793b32118808f26b667a8806aee",
-          "manifestPath": "<PATH>",
-          "matches": true,
-          "ok": true
-        },
-        "ok": true,
-        "port": 0,
-        "profile": "node-express-api-sqlite",
-        "response": {
-          "status": "ok",
-          "timestamp": null,
-          "uptimeSeconds": 0
-        },
-        "template": "node-express-api-sqlite",
-        "url": "",
-        "validation": {
-          "appPath": "<PATH>",
-          "baseUrl": "",
-          "checks": [
-            {
-              "class": null,
-              "details": {
-                "baseUrl": "",
-                "ms": 5,
-                "probeUrl": "http://localhost:50782/health"
-              },
-              "id": "boot",
-              "ok": true,
-              "required": true
-            },
-            {
-              "class": null,
-              "details": {
-                "statusCode": 200,
-                "url": ""
-              },
-              "id": "health",
-              "ok": true,
-              "required": true
-            },
-            {
-              "class": null,
-              "details": {
-                "checked": [
-                  {
-                    "method": "GET",
-                    "path": "<PATH>"
-                  },
-                  {
-                    "method": "GET",
-                    "path": "<PATH>"
-                  },
-                  {
-                    "method": "GET",
-                    "path": "<PATH>"
-                  }
-                ]
-              },
-              "id": "endpoints",
-              "ok": true,
-              "required": true
-            }
-          ],
-          "durationMs": 0,
-          "failureClass": null,
-          "finishedAt": null,
-          "ok": true,
-          "profileUsed": "node-express-api-sqlite",
-          "startedAt": null,
-          "template": "node-express-api-sqlite",
-          "templateOriginal": "node-express-api-sqlite"
-        }
-      },
-      {
-        "baseUrl": "",
-        "didInstall": true,
-        "installMode": "always",
-        "manifestIntegrity": {
-          "currentFingerprint": "1e357eccf977a56a5d0c2ee4c1d50ff637f8e793b32118808f26b667a8806aee",
-          "expectedFingerprint": "1e357eccf977a56a5d0c2ee4c1d50ff637f8e793b32118808f26b667a8806aee",
-          "manifestPath": "<PATH>",
-          "matches": true,
-          "ok": true
-        },
-        "ok": true,
-        "port": 0,
-        "profile": "node-express-api-sqlite",
-        "response": {
-          "status": "ok",
-          "timestamp": null,
-          "uptimeSeconds": 0
-        },
-        "template": "node-express-api-sqlite",
-        "url": "",
-        "validation": {
-          "appPath": "<PATH>",
-          "baseUrl": "",
-          "checks": [
-            {
-              "class": null,
-              "details": {
-                "baseUrl": "",
-                "ms": 6,
-                "probeUrl": "http://localhost:50790/health"
-              },
-              "id": "boot",
-              "ok": true,
-              "required": true
-            },
-            {
-              "class": null,
-              "details": {
-                "statusCode": 200,
-                "url": ""
-              },
-              "id": "health",
-              "ok": true,
-              "required": true
-            },
-            {
-              "class": null,
-              "details": {
-                "checked": [
-                  {
-                    "method": "GET",
-                    "path": "<PATH>"
-                  },
-                  {
-                    "method": "GET",
-                    "path": "<PATH>"
-                  },
-                  {
-                    "method": "GET",
-                    "path": "<PATH>"
-                  }
-                ]
-              },
-              "id": "endpoints",
-              "ok": true,
-              "required": true
-            }
-          ],
-          "durationMs": 0,
-          "failureClass": null,
-          "finishedAt": null,
-          "ok": true,
-          "profileUsed": "node-express-api-sqlite",
-          "startedAt": null,
-          "template": "node-express-api-sqlite",
-          "templateOriginal": "node-express-api-sqlite"
-        }
-      },
-      {
-        "baseUrl": "",
-        "didInstall": true,
-        "installMode": "always",
-        "manifestIntegrity": {
-          "currentFingerprint": "1e357eccf977a56a5d0c2ee4c1d50ff637f8e793b32118808f26b667a8806aee",
-          "expectedFingerprint": "1e357eccf977a56a5d0c2ee4c1d50ff637f8e793b32118808f26b667a8806aee",
-          "manifestPath": "<PATH>",
-          "matches": true,
-          "ok": true
-        },
-        "ok": true,
-        "port": 0,
-        "profile": "node-express-api-sqlite",
-        "response": {
-          "status": "ok",
-          "timestamp": null,
-          "uptimeSeconds": 0
-        },
-        "template": "node-express-api-sqlite",
-        "url": "",
-        "validation": {
-          "appPath": "<PATH>",
-          "baseUrl": "",
-          "checks": [
-            {
-              "class": null,
-              "details": {
-                "baseUrl": "",
-                "ms": 3,
-                "probeUrl": "http://localhost:50798/health"
-              },
-              "id": "boot",
-              "ok": true,
-              "required": true
-            },
-            {
-              "class": null,
-              "details": {
-                "statusCode": 200,
-                "url": ""
-              },
-              "id": "health",
-              "ok": true,
-              "required": true
-            },
-            {
-              "class": null,
-              "details": {
-                "checked": [
-                  {
-                    "method": "GET",
-                    "path": "<PATH>"
-                  },
-                  {
-                    "method": "GET",
-                    "path": "<PATH>"
-                  },
-                  {
-                    "method": "GET",
-                    "path": "<PATH>"
-                  }
-                ]
-              },
-              "id": "endpoints",
-              "ok": true,
-              "required": true
-            }
-          ],
-          "durationMs": 0,
-          "failureClass": null,
-          "finishedAt": null,
-          "ok": true,
-          "profileUsed": "node-express-api-sqlite",
-          "startedAt": null,
-          "template": "node-express-api-sqlite",
-          "templateOriginal": "node-express-api-sqlite"
-        }
-      },
-      {
-        "baseUrl": "",
-        "didInstall": true,
-        "installMode": "always",
-        "manifestIntegrity": {
-          "currentFingerprint": "1e357eccf977a56a5d0c2ee4c1d50ff637f8e793b32118808f26b667a8806aee",
-          "expectedFingerprint": "1e357eccf977a56a5d0c2ee4c1d50ff637f8e793b32118808f26b667a8806aee",
+          "currentFingerprint": "d737386ef3d3b499b630c402890f452141cdc0c746cc46dfe3ca4b3d8a8863bb",
+          "expectedFingerprint": "d737386ef3d3b499b630c402890f452141cdc0c746cc46dfe3ca4b3d8a8863bb",
           "manifestPath": "<PATH>",
           "matches": true,
           "ok": true
@@ -273,7 +36,7 @@
               "details": {
                 "baseUrl": "",
                 "ms": 4,
-                "probeUrl": "http://localhost:56966/health"
+                "probeUrl": "http://localhost:61987/health"
               },
               "id": "boot",
               "ok": true,
@@ -327,8 +90,8 @@
         "didInstall": true,
         "installMode": "always",
         "manifestIntegrity": {
-          "currentFingerprint": "7766042f049352ec9744d59238b1fab46ddd71aecb201a269cbb8aeb71de2be4",
-          "expectedFingerprint": "7766042f049352ec9744d59238b1fab46ddd71aecb201a269cbb8aeb71de2be4",
+          "currentFingerprint": "d737386ef3d3b499b630c402890f452141cdc0c746cc46dfe3ca4b3d8a8863bb",
+          "expectedFingerprint": "d737386ef3d3b499b630c402890f452141cdc0c746cc46dfe3ca4b3d8a8863bb",
           "manifestPath": "<PATH>",
           "matches": true,
           "ok": true
@@ -351,8 +114,8 @@
               "class": null,
               "details": {
                 "baseUrl": "",
-                "ms": 2,
-                "probeUrl": "http://localhost:58749/health"
+                "ms": 7,
+                "probeUrl": "http://localhost:61996/health"
               },
               "id": "boot",
               "ok": true,
@@ -406,8 +169,403 @@
         "didInstall": true,
         "installMode": "always",
         "manifestIntegrity": {
-          "currentFingerprint": "0aada4449716aa0e2fcef728a7a113abe756a43178931a7f7ada0861d3fa05ae",
-          "expectedFingerprint": "0aada4449716aa0e2fcef728a7a113abe756a43178931a7f7ada0861d3fa05ae",
+          "currentFingerprint": "d737386ef3d3b499b630c402890f452141cdc0c746cc46dfe3ca4b3d8a8863bb",
+          "expectedFingerprint": "d737386ef3d3b499b630c402890f452141cdc0c746cc46dfe3ca4b3d8a8863bb",
+          "manifestPath": "<PATH>",
+          "matches": true,
+          "ok": true
+        },
+        "ok": true,
+        "port": 0,
+        "profile": "node-express-api-sqlite",
+        "response": {
+          "status": "ok",
+          "timestamp": null,
+          "uptimeSeconds": 0
+        },
+        "template": "node-express-api-sqlite",
+        "url": "",
+        "validation": {
+          "appPath": "<PATH>",
+          "baseUrl": "",
+          "checks": [
+            {
+              "class": null,
+              "details": {
+                "baseUrl": "",
+                "ms": 6,
+                "probeUrl": "http://localhost:62004/health"
+              },
+              "id": "boot",
+              "ok": true,
+              "required": true
+            },
+            {
+              "class": null,
+              "details": {
+                "statusCode": 200,
+                "url": ""
+              },
+              "id": "health",
+              "ok": true,
+              "required": true
+            },
+            {
+              "class": null,
+              "details": {
+                "checked": [
+                  {
+                    "method": "GET",
+                    "path": "<PATH>"
+                  },
+                  {
+                    "method": "GET",
+                    "path": "<PATH>"
+                  },
+                  {
+                    "method": "GET",
+                    "path": "<PATH>"
+                  }
+                ]
+              },
+              "id": "endpoints",
+              "ok": true,
+              "required": true
+            }
+          ],
+          "durationMs": 0,
+          "failureClass": null,
+          "finishedAt": null,
+          "ok": true,
+          "profileUsed": "node-express-api-sqlite",
+          "startedAt": null,
+          "template": "node-express-api-sqlite",
+          "templateOriginal": "node-express-api-sqlite"
+        }
+      },
+      {
+        "baseUrl": "",
+        "didInstall": true,
+        "installMode": "always",
+        "manifestIntegrity": {
+          "currentFingerprint": "d737386ef3d3b499b630c402890f452141cdc0c746cc46dfe3ca4b3d8a8863bb",
+          "expectedFingerprint": "d737386ef3d3b499b630c402890f452141cdc0c746cc46dfe3ca4b3d8a8863bb",
+          "manifestPath": "<PATH>",
+          "matches": true,
+          "ok": true
+        },
+        "ok": true,
+        "port": 0,
+        "profile": "node-express-api-sqlite",
+        "response": {
+          "status": "ok",
+          "timestamp": null,
+          "uptimeSeconds": 0
+        },
+        "template": "node-express-api-sqlite",
+        "url": "",
+        "validation": {
+          "appPath": "<PATH>",
+          "baseUrl": "",
+          "checks": [
+            {
+              "class": null,
+              "details": {
+                "baseUrl": "",
+                "ms": 11,
+                "probeUrl": "http://localhost:62012/health"
+              },
+              "id": "boot",
+              "ok": true,
+              "required": true
+            },
+            {
+              "class": null,
+              "details": {
+                "statusCode": 200,
+                "url": ""
+              },
+              "id": "health",
+              "ok": true,
+              "required": true
+            },
+            {
+              "class": null,
+              "details": {
+                "checked": [
+                  {
+                    "method": "GET",
+                    "path": "<PATH>"
+                  },
+                  {
+                    "method": "GET",
+                    "path": "<PATH>"
+                  },
+                  {
+                    "method": "GET",
+                    "path": "<PATH>"
+                  }
+                ]
+              },
+              "id": "endpoints",
+              "ok": true,
+              "required": true
+            }
+          ],
+          "durationMs": 0,
+          "failureClass": null,
+          "finishedAt": null,
+          "ok": true,
+          "profileUsed": "node-express-api-sqlite",
+          "startedAt": null,
+          "template": "node-express-api-sqlite",
+          "templateOriginal": "node-express-api-sqlite"
+        }
+      },
+      {
+        "baseUrl": "",
+        "didInstall": true,
+        "installMode": "always",
+        "manifestIntegrity": {
+          "currentFingerprint": "7c389310fd02cab7672d0471f34ad02eac47169d0b8b2c8a43e57e9835f904f6",
+          "expectedFingerprint": "7c389310fd02cab7672d0471f34ad02eac47169d0b8b2c8a43e57e9835f904f6",
+          "manifestPath": "<PATH>",
+          "matches": true,
+          "ok": true
+        },
+        "ok": true,
+        "port": 0,
+        "profile": "node-express-api-sqlite",
+        "response": {
+          "status": "ok",
+          "timestamp": null,
+          "uptimeSeconds": 0
+        },
+        "template": "node-express-api-sqlite",
+        "url": "",
+        "validation": {
+          "appPath": "<PATH>",
+          "baseUrl": "",
+          "checks": [
+            {
+              "class": null,
+              "details": {
+                "baseUrl": "",
+                "ms": 3,
+                "probeUrl": "http://localhost:62022/health"
+              },
+              "id": "boot",
+              "ok": true,
+              "required": true
+            },
+            {
+              "class": null,
+              "details": {
+                "statusCode": 200,
+                "url": ""
+              },
+              "id": "health",
+              "ok": true,
+              "required": true
+            },
+            {
+              "class": null,
+              "details": {
+                "checked": [
+                  {
+                    "method": "GET",
+                    "path": "<PATH>"
+                  },
+                  {
+                    "method": "GET",
+                    "path": "<PATH>"
+                  },
+                  {
+                    "method": "GET",
+                    "path": "<PATH>"
+                  }
+                ]
+              },
+              "id": "endpoints",
+              "ok": true,
+              "required": true
+            }
+          ],
+          "durationMs": 0,
+          "failureClass": null,
+          "finishedAt": null,
+          "ok": true,
+          "profileUsed": "node-express-api-sqlite",
+          "startedAt": null,
+          "template": "node-express-api-sqlite",
+          "templateOriginal": "node-express-api-sqlite"
+        }
+      },
+      {
+        "baseUrl": "",
+        "didInstall": true,
+        "installMode": "always",
+        "manifestIntegrity": {
+          "currentFingerprint": "336d999151dfb58dcfcce6640a590c4c4c8a8515037083a819aa38787c767690",
+          "expectedFingerprint": "336d999151dfb58dcfcce6640a590c4c4c8a8515037083a819aa38787c767690",
+          "manifestPath": "<PATH>",
+          "matches": true,
+          "ok": true
+        },
+        "ok": true,
+        "port": 0,
+        "profile": "node-express-api-sqlite",
+        "response": {
+          "status": "ok",
+          "timestamp": null,
+          "uptimeSeconds": 0
+        },
+        "template": "node-express-api-sqlite",
+        "url": "",
+        "validation": {
+          "appPath": "<PATH>",
+          "baseUrl": "",
+          "checks": [
+            {
+              "class": null,
+              "details": {
+                "baseUrl": "",
+                "ms": 4,
+                "probeUrl": "http://localhost:62032/health"
+              },
+              "id": "boot",
+              "ok": true,
+              "required": true
+            },
+            {
+              "class": null,
+              "details": {
+                "statusCode": 200,
+                "url": ""
+              },
+              "id": "health",
+              "ok": true,
+              "required": true
+            },
+            {
+              "class": null,
+              "details": {
+                "checked": [
+                  {
+                    "method": "GET",
+                    "path": "<PATH>"
+                  },
+                  {
+                    "method": "GET",
+                    "path": "<PATH>"
+                  },
+                  {
+                    "method": "GET",
+                    "path": "<PATH>"
+                  }
+                ]
+              },
+              "id": "endpoints",
+              "ok": true,
+              "required": true
+            }
+          ],
+          "durationMs": 0,
+          "failureClass": null,
+          "finishedAt": null,
+          "ok": true,
+          "profileUsed": "node-express-api-sqlite",
+          "startedAt": null,
+          "template": "node-express-api-sqlite",
+          "templateOriginal": "node-express-api-sqlite"
+        }
+      },
+      {
+        "baseUrl": "",
+        "didInstall": true,
+        "installMode": "always",
+        "manifestIntegrity": {
+          "currentFingerprint": "99fc1ace2e25bdc957609c4ee3ca8594015dab230a4dfb6284645d19bc324645",
+          "expectedFingerprint": "99fc1ace2e25bdc957609c4ee3ca8594015dab230a4dfb6284645d19bc324645",
+          "manifestPath": "<PATH>",
+          "matches": true,
+          "ok": true
+        },
+        "ok": true,
+        "port": 0,
+        "profile": "node-express-api-sqlite",
+        "response": {
+          "status": "ok",
+          "timestamp": null,
+          "uptimeSeconds": 0
+        },
+        "template": "node-express-api-sqlite",
+        "url": "",
+        "validation": {
+          "appPath": "<PATH>",
+          "baseUrl": "",
+          "checks": [
+            {
+              "class": null,
+              "details": {
+                "baseUrl": "",
+                "ms": 4,
+                "probeUrl": "http://localhost:62042/health"
+              },
+              "id": "boot",
+              "ok": true,
+              "required": true
+            },
+            {
+              "class": null,
+              "details": {
+                "statusCode": 200,
+                "url": ""
+              },
+              "id": "health",
+              "ok": true,
+              "required": true
+            },
+            {
+              "class": null,
+              "details": {
+                "checked": [
+                  {
+                    "method": "GET",
+                    "path": "<PATH>"
+                  },
+                  {
+                    "method": "GET",
+                    "path": "<PATH>"
+                  },
+                  {
+                    "method": "GET",
+                    "path": "<PATH>"
+                  }
+                ]
+              },
+              "id": "endpoints",
+              "ok": true,
+              "required": true
+            }
+          ],
+          "durationMs": 0,
+          "failureClass": null,
+          "finishedAt": null,
+          "ok": true,
+          "profileUsed": "node-express-api-sqlite",
+          "startedAt": null,
+          "template": "node-express-api-sqlite",
+          "templateOriginal": "node-express-api-sqlite"
+        }
+      },
+      {
+        "baseUrl": "",
+        "didInstall": true,
+        "installMode": "always",
+        "manifestIntegrity": {
+          "currentFingerprint": "7c389310fd02cab7672d0471f34ad02eac47169d0b8b2c8a43e57e9835f904f6",
+          "expectedFingerprint": "7c389310fd02cab7672d0471f34ad02eac47169d0b8b2c8a43e57e9835f904f6",
           "manifestPath": "<PATH>",
           "matches": true,
           "ok": true
@@ -431,7 +589,7 @@
               "details": {
                 "baseUrl": "",
                 "ms": 1,
-                "probeUrl": "http://localhost:58760/health"
+                "probeUrl": "http://localhost:62052/health"
               },
               "id": "boot",
               "ok": true,
@@ -485,8 +643,87 @@
         "didInstall": true,
         "installMode": "always",
         "manifestIntegrity": {
-          "currentFingerprint": "40f47722b37fece324d23bf015a69c6f58ace8d7dc5297e0cca8c1bf993faf2f",
-          "expectedFingerprint": "40f47722b37fece324d23bf015a69c6f58ace8d7dc5297e0cca8c1bf993faf2f",
+          "currentFingerprint": "7c389310fd02cab7672d0471f34ad02eac47169d0b8b2c8a43e57e9835f904f6",
+          "expectedFingerprint": "7c389310fd02cab7672d0471f34ad02eac47169d0b8b2c8a43e57e9835f904f6",
+          "manifestPath": "<PATH>",
+          "matches": true,
+          "ok": true
+        },
+        "ok": true,
+        "port": 0,
+        "profile": "node-express-api-sqlite",
+        "response": {
+          "status": "ok",
+          "timestamp": null,
+          "uptimeSeconds": 0
+        },
+        "template": "node-express-api-sqlite",
+        "url": "",
+        "validation": {
+          "appPath": "<PATH>",
+          "baseUrl": "",
+          "checks": [
+            {
+              "class": null,
+              "details": {
+                "baseUrl": "",
+                "ms": 3,
+                "probeUrl": "http://localhost:62062/health"
+              },
+              "id": "boot",
+              "ok": true,
+              "required": true
+            },
+            {
+              "class": null,
+              "details": {
+                "statusCode": 200,
+                "url": ""
+              },
+              "id": "health",
+              "ok": true,
+              "required": true
+            },
+            {
+              "class": null,
+              "details": {
+                "checked": [
+                  {
+                    "method": "GET",
+                    "path": "<PATH>"
+                  },
+                  {
+                    "method": "GET",
+                    "path": "<PATH>"
+                  },
+                  {
+                    "method": "GET",
+                    "path": "<PATH>"
+                  }
+                ]
+              },
+              "id": "endpoints",
+              "ok": true,
+              "required": true
+            }
+          ],
+          "durationMs": 0,
+          "failureClass": null,
+          "finishedAt": null,
+          "ok": true,
+          "profileUsed": "node-express-api-sqlite",
+          "startedAt": null,
+          "template": "node-express-api-sqlite",
+          "templateOriginal": "node-express-api-sqlite"
+        }
+      },
+      {
+        "baseUrl": "",
+        "didInstall": true,
+        "installMode": "always",
+        "manifestIntegrity": {
+          "currentFingerprint": "d737386ef3d3b499b630c402890f452141cdc0c746cc46dfe3ca4b3d8a8863bb",
+          "expectedFingerprint": "d737386ef3d3b499b630c402890f452141cdc0c746cc46dfe3ca4b3d8a8863bb",
           "manifestPath": "<PATH>",
           "matches": true,
           "ok": true
@@ -510,244 +747,7 @@
               "details": {
                 "baseUrl": "",
                 "ms": 2,
-                "probeUrl": "http://localhost:58770/health"
-              },
-              "id": "boot",
-              "ok": true,
-              "required": true
-            },
-            {
-              "class": null,
-              "details": {
-                "statusCode": 200,
-                "url": ""
-              },
-              "id": "health",
-              "ok": true,
-              "required": true
-            },
-            {
-              "class": null,
-              "details": {
-                "checked": [
-                  {
-                    "method": "GET",
-                    "path": "<PATH>"
-                  },
-                  {
-                    "method": "GET",
-                    "path": "<PATH>"
-                  },
-                  {
-                    "method": "GET",
-                    "path": "<PATH>"
-                  }
-                ]
-              },
-              "id": "endpoints",
-              "ok": true,
-              "required": true
-            }
-          ],
-          "durationMs": 0,
-          "failureClass": null,
-          "finishedAt": null,
-          "ok": true,
-          "profileUsed": "node-express-api-sqlite",
-          "startedAt": null,
-          "template": "node-express-api-sqlite",
-          "templateOriginal": "node-express-api-sqlite"
-        }
-      },
-      {
-        "baseUrl": "",
-        "didInstall": true,
-        "installMode": "always",
-        "manifestIntegrity": {
-          "currentFingerprint": "7766042f049352ec9744d59238b1fab46ddd71aecb201a269cbb8aeb71de2be4",
-          "expectedFingerprint": "7766042f049352ec9744d59238b1fab46ddd71aecb201a269cbb8aeb71de2be4",
-          "manifestPath": "<PATH>",
-          "matches": true,
-          "ok": true
-        },
-        "ok": true,
-        "port": 0,
-        "profile": "node-express-api-sqlite",
-        "response": {
-          "status": "ok",
-          "timestamp": null,
-          "uptimeSeconds": 0
-        },
-        "template": "node-express-api-sqlite",
-        "url": "",
-        "validation": {
-          "appPath": "<PATH>",
-          "baseUrl": "",
-          "checks": [
-            {
-              "class": null,
-              "details": {
-                "baseUrl": "",
-                "ms": 1,
-                "probeUrl": "http://localhost:58780/health"
-              },
-              "id": "boot",
-              "ok": true,
-              "required": true
-            },
-            {
-              "class": null,
-              "details": {
-                "statusCode": 200,
-                "url": ""
-              },
-              "id": "health",
-              "ok": true,
-              "required": true
-            },
-            {
-              "class": null,
-              "details": {
-                "checked": [
-                  {
-                    "method": "GET",
-                    "path": "<PATH>"
-                  },
-                  {
-                    "method": "GET",
-                    "path": "<PATH>"
-                  },
-                  {
-                    "method": "GET",
-                    "path": "<PATH>"
-                  }
-                ]
-              },
-              "id": "endpoints",
-              "ok": true,
-              "required": true
-            }
-          ],
-          "durationMs": 0,
-          "failureClass": null,
-          "finishedAt": null,
-          "ok": true,
-          "profileUsed": "node-express-api-sqlite",
-          "startedAt": null,
-          "template": "node-express-api-sqlite",
-          "templateOriginal": "node-express-api-sqlite"
-        }
-      },
-      {
-        "baseUrl": "",
-        "didInstall": true,
-        "installMode": "always",
-        "manifestIntegrity": {
-          "currentFingerprint": "7766042f049352ec9744d59238b1fab46ddd71aecb201a269cbb8aeb71de2be4",
-          "expectedFingerprint": "7766042f049352ec9744d59238b1fab46ddd71aecb201a269cbb8aeb71de2be4",
-          "manifestPath": "<PATH>",
-          "matches": true,
-          "ok": true
-        },
-        "ok": true,
-        "port": 0,
-        "profile": "node-express-api-sqlite",
-        "response": {
-          "status": "ok",
-          "timestamp": null,
-          "uptimeSeconds": 0
-        },
-        "template": "node-express-api-sqlite",
-        "url": "",
-        "validation": {
-          "appPath": "<PATH>",
-          "baseUrl": "",
-          "checks": [
-            {
-              "class": null,
-              "details": {
-                "baseUrl": "",
-                "ms": 2,
-                "probeUrl": "http://localhost:58788/health"
-              },
-              "id": "boot",
-              "ok": true,
-              "required": true
-            },
-            {
-              "class": null,
-              "details": {
-                "statusCode": 200,
-                "url": ""
-              },
-              "id": "health",
-              "ok": true,
-              "required": true
-            },
-            {
-              "class": null,
-              "details": {
-                "checked": [
-                  {
-                    "method": "GET",
-                    "path": "<PATH>"
-                  },
-                  {
-                    "method": "GET",
-                    "path": "<PATH>"
-                  },
-                  {
-                    "method": "GET",
-                    "path": "<PATH>"
-                  }
-                ]
-              },
-              "id": "endpoints",
-              "ok": true,
-              "required": true
-            }
-          ],
-          "durationMs": 0,
-          "failureClass": null,
-          "finishedAt": null,
-          "ok": true,
-          "profileUsed": "node-express-api-sqlite",
-          "startedAt": null,
-          "template": "node-express-api-sqlite",
-          "templateOriginal": "node-express-api-sqlite"
-        }
-      },
-      {
-        "baseUrl": "",
-        "didInstall": true,
-        "installMode": "always",
-        "manifestIntegrity": {
-          "currentFingerprint": "1e357eccf977a56a5d0c2ee4c1d50ff637f8e793b32118808f26b667a8806aee",
-          "expectedFingerprint": "1e357eccf977a56a5d0c2ee4c1d50ff637f8e793b32118808f26b667a8806aee",
-          "manifestPath": "<PATH>",
-          "matches": true,
-          "ok": true
-        },
-        "ok": true,
-        "port": 0,
-        "profile": "node-express-api-sqlite",
-        "response": {
-          "status": "ok",
-          "timestamp": null,
-          "uptimeSeconds": 0
-        },
-        "template": "node-express-api-sqlite",
-        "url": "",
-        "validation": {
-          "appPath": "<PATH>",
-          "baseUrl": "",
-          "checks": [
-            {
-              "class": null,
-              "details": {
-                "baseUrl": "",
-                "ms": 2,
-                "probeUrl": "http://localhost:58798/health"
+                "probeUrl": "http://localhost:62072/health"
               },
               "id": "boot",
               "ok": true,
