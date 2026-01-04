@@ -129,14 +129,14 @@ Commands:
                [--contracts true] [--contracts-dir <path>]
                [--contracts-mode <check|update>]
 
-  ci:check --root <path> [--json] [--quiet]
+  ci:check --root <path> [--ci] [--json] [--quiet]
            [--no-install] [--install-mode <always|never|if-missing>] [--profile <name>]
            [--progress] [--max <n>] [--include <text>] [--heal-manifest]
            [--refresh-manifests <never|after>] [--apply]
            [--contracts-dir <path>]
 
 CI convenience:
-  --ci                 Alias for --json --quiet
+  --ci                 Alias for --json --quiet (accepted by all commands; removed before dispatch)
   --json-on-pipe true  If stdout is piped (not TTY), force --json
 `.trim();
 }
@@ -205,13 +205,22 @@ function discoverApps(rootPath, { include, max } = {}) {
 async function main() {
   const { cmd, flags } = parseArgs(process.argv);
 
-  const ciMode = hasFlag(flags, "ci");
+  // --ci is a supported alias/no-op flag:
+  // - Applies CI convenience defaults (json + quiet)
+  // - Then removed before dispatch so downstream modules can validate flags strictly
+  const ciMode = Object.prototype.hasOwnProperty.call(flags, "ci") && hasFlag(flags, "ci");
+
   const jsonOnPipe = isTrueish(flags["json-on-pipe"]);
   const stdoutNotTty = Boolean(process.stdout && process.stdout.isTTY !== true);
 
   if (ciMode) {
     flags.json = true;
     flags.quiet = true;
+  }
+
+  // Remove --ci so future strict flag validators in subcommands won't fail.
+  if (Object.prototype.hasOwnProperty.call(flags, "ci")) {
+    delete flags.ci;
   }
 
   if (jsonOnPipe && stdoutNotTty) {
@@ -391,7 +400,18 @@ async function main() {
       const mod = await import("./src/validate-all.js");
       const fn = pickExport(mod, ["validateAll"], "./src/validate-all.js");
 
-      await fn({ rootPath: root, json, quiet, noInstall, installMode, outPath: out, profile, progress, max, include });
+      await fn({
+        rootPath: root,
+        json,
+        quiet,
+        noInstall,
+        installMode,
+        outPath: out,
+        profile,
+        progress,
+        max,
+        include,
+      });
       return;
     }
 
@@ -413,7 +433,20 @@ async function main() {
       const mod = await import("./src/report-ci.js");
       const fn = pickExport(mod, ["reportCi"], "./src/report-ci.js");
 
-      await fn({ root, rootPath: root, json, quiet, noInstall, installMode, outPath: out, profile, progress, max, include, healManifest });
+      await fn({
+        root,
+        rootPath: root,
+        json,
+        quiet,
+        noInstall,
+        installMode,
+        outPath: out,
+        profile,
+        progress,
+        max,
+        include,
+        healManifest,
+      });
       return;
     }
 
