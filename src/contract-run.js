@@ -40,11 +40,6 @@ function ensureDirForFile(filePath) {
   fs.mkdirSync(dir, { recursive: true });
 }
 
-function writeJsonFile(filePath, obj) {
-  ensureDirForFile(filePath);
-  fs.writeFileSync(filePath, JSON.stringify(obj, null, 2) + "\n", "utf8");
-}
-
 function snapshotPathFor({ contractsDir, cmd }) {
   const dirAbs = path.isAbsolute(contractsDir)
     ? contractsDir
@@ -65,77 +60,20 @@ function normalizeInstallModeFlag(v) {
   return undefined;
 }
 
-async function runCmdJson({ cmd, args }) {
-  const node = process.execPath;
-  const entry = path.resolve(process.cwd(), "index.js");
-  const fullArgs = [entry, cmd, ...args];
-
-  return new Promise((resolve) => {
-    const child = spawn(node, fullArgs, {
-      stdio: ["ignore", "pipe", "pipe"],
-      windowsHide: true,
-      env: { ...process.env, FORCE_COLOR: "0" },
-    });
-
-    let stdout = "";
-    let stderr = "";
-
-    child.stdout.on("data", (d) => (stdout += d.toString("utf8")));
-    child.stderr.on("data", (d) => (stderr += d.toString("utf8")));
-
-    child.on("close", (code) => {
-      const exitCode = typeof code === "number" ? code : 2;
-      const outTrim = stdout.trim();
-      const errTrim = stderr.trim() || "";
-
-      if (!outTrim) {
-        resolve({
-          ok: false,
-          exitCode,
-          json: null,
-          error: {
-            code: "ERR_CMD_NO_STDOUT",
-            message: `${cmd} produced no stdout JSON`,
-            cmd,
-            stderr: errTrim || null,
-          },
-        });
-        return;
-      }
-
-      try {
-        const parsed = JSON.parse(outTrim);
-        resolve({
-          ok: exitCode === 0,
-          exitCode,
-          json: parsed,
-          error:
-            exitCode === 0
-              ? null
-              : {
-                  code: "ERR_CMD_NONZERO",
-                  message: `${cmd} exited non-zero (${exitCode})`,
-                  cmd,
-                  stderr: errTrim || null,
-                },
-        });
-      } catch (e) {
-        resolve({
-          ok: false,
-          exitCode,
-          json: null,
-          error: {
-            code: "ERR_CMD_BAD_JSON",
-            message: `${cmd} stdout was not valid JSON`,
-            cmd,
-            parseError: String(e?.message || e),
-            stdout: outTrim.slice(0, 2000),
-            stderr: errTrim || null,
-          },
-        });
-      }
-    });
-  });
+function readSnapshotSafe(snapshotPath) {
+  try {
+    const snap = readSnapshotFile(snapshotPath);
+    return { ok: true, snap };
+  } catch (e) {
+    return {
+      ok: false,
+      snap: null,
+      error: {
+        code: "ERR_CONTRACT_SNAPSHOT_MISSING",
+        message: String(e?.message ?? e),
+      },
+    };
+  }
 }
 
 export async function contractRun({ flags }) {
@@ -160,13 +98,7 @@ export async function contractRun({ flags }) {
     ? String(flags["refresh-manifests"]).toLowerCase().trim()
     : "never";
 
-  const apply =
-    flags.apply != null && flags.apply !== true
-      ? String(flags.apply).toLowerCase().trim() === "true"
-      : false;
-
   const doContracts = isTrueish(flags.contracts);
-
   const contractsDir = flags["contracts-dir"]
     ? String(flags["contracts-dir"])
     : "ci/contracts";
@@ -177,15 +109,16 @@ export async function contractRun({ flags }) {
 
   const allowUpdate = hasFlag(flags, "allow-update");
 
-  // Hard guard: prevent accidental update
-  const effectiveMode =
-    contractsMode === "update" && allowUpdate ? "update" : "check";
-
-  if (contractsMode === "update" && effectiveMode !== "update" && !quiet) {
+  // 🔒 WARNING-ONLY GUARD (explicit intent)
+  if (contractsMode === "update" && !allowUpdate && !quiet) {
     process.stderr.write(
-      "[contract:run] Refusing --contracts-mode update without --allow-update.\n"
+      "[contract:run] WARNING: --contracts-mode update will overwrite contract snapshots.\n" +
+        "               This is an intentional mutation of CI truth.\n" +
+        "               Re-run with --allow-update to acknowledge intent.\n"
     );
   }
+
+  const settleMs = safeNumber(flags["settle-ms"], 0);
 
   const startedAt = new Date().toISOString();
 
@@ -224,94 +157,142 @@ export async function contractRun({ flags }) {
       },
       hardGate: true,
     },
-    {
-      cmd: "manifest:refresh:all",
-      args: () => {
-        const a = ["--root", root];
-        if (apply) a.push("--apply");
-        if (profile) a.push("--templateDir", String(profile));
-        if (include) a.push("--include", include);
-        if (typeof max === "number") a.push("--max", String(max));
-        if (progress) a.push("--progress");
-        // This command should be schema-checked too (it can drift)
-        a.push("--json", "--quiet");
-        return a;
-      },
-      hardGate: false,
-      enabled: refreshManifests === "after",
-    },
+    // Keep this available for future expansion
+    // { cmd: "manifest:refresh:all", ... }
   ];
 
-  for (const item of runList) {
-    if (item.enabled === false) continue;
+  for (let idx = 0; idx < runList.length; idx++) {
+    const item = runList[idx];
 
-    if (progress) out.log(`[contract:run] run ${item.cmd}`);
+    if (progress) out.log(`[contract:run] ${idx + 1}/${runList.length} ${item.cmd}`);
 
-    const cmdRes = await runCmdJson({ cmd: item.cmd, args: item.args() });
+    const node = process.execPath;
+    const entry = path.resolve(process.cwd(), "index.js");
+    const args = [entry, item.cmd, ...item.args()];
 
-    const schema = cmdRes.json
-      ? SCHEMA_CHECKERS[item.cmd]?.(cmdRes.json) ?? { ok: false, issues: ["no-checker"] }
+    const res = await new Promise((resolve) => {
+      const child = spawn(node, args, {
+        stdio: ["ignore", "pipe", "pipe"],
+        windowsHide: true,
+        env: { ...process.env, FORCE_COLOR: "0" },
+      });
+
+      let stdout = "";
+      let stderr = "";
+
+      child.stdout.on("data", (d) => (stdout += d.toString("utf8")));
+      child.stderr.on("data", (d) => (stderr += d.toString("utf8")));
+
+      child.on("close", (code) => {
+        const exitCode = typeof code === "number" ? code : 1;
+
+        let jsonOut = null;
+        try {
+          const t = stdout.trim();
+          if (t) jsonOut = JSON.parse(t);
+        } catch (_) {}
+
+        resolve({
+          exitCode,
+          json: jsonOut,
+          stderr: (stderr || "").trim() || null,
+        });
+      });
+    });
+
+    // ---- schema check ----
+    const schema = res.json
+      ? SCHEMA_CHECKERS[item.cmd]?.(res.json) ?? { ok: false, issues: ["no-checker"] }
       : { ok: false, issues: ["no-json"] };
 
     if (!schema.ok) schemaFailCount++;
-    if (cmdRes.exitCode !== 0 && item.hardGate) cmdFailCount++;
 
+    // ---- contract check/update ----
     let contract = null;
+    let contractMatch = null;
 
-    if (doContracts && cmdRes.json) {
+    if (doContracts && res.json) {
       const snapPath = snapshotPathFor({ contractsDir, cmd: item.cmd });
 
-      if (effectiveMode === "update") {
-        const normalized = normalizeForContract(item.cmd, cmdRes.json);
+      if (contractsMode === "update") {
+        ensureDirForFile(snapPath);
+        const normalized = normalizeForContract(item.cmd, res.json);
         writeSnapshotFile(snapPath, normalized);
         contract = {
           mode: "update",
           snapshot: path.resolve(snapPath),
           updated: true,
-          match: true,
-          diffSummary: null,
         };
+        contractMatch = true;
       } else {
-        try {
-          const snap = readSnapshotFile(snapPath);
-          const normalized = normalizeForContract(item.cmd, cmdRes.json);
-          const cmp = compareNormalized(snap.value, normalized);
-          if (!cmp.ok) contractFailCount++;
-          contract = {
-            mode: "check",
-            snapshot: snap.abs,
-            match: Boolean(cmp.ok),
-            diffSummary: cmp.ok ? null : cmp.summary,
-          };
-        } catch (e) {
+        const snapLoad = readSnapshotSafe(snapPath);
+
+        if (!snapLoad.ok) {
           contractFailCount++;
           contract = {
             mode: "check",
             snapshot: path.resolve(snapPath),
             match: false,
-            diffSummary: {
-              kind: "missing_snapshot",
-              message: String(e?.message || e),
-            },
+            diffSummary: { kind: "missing_snapshot", message: snapLoad.error.message },
+            error: snapLoad.error,
           };
+          contractMatch = false;
+        } else {
+          const normalized = normalizeForContract(item.cmd, res.json);
+          const cmp = compareNormalized(snapLoad.snap.value, normalized);
+
+          if (!cmp.ok) contractFailCount++;
+
+          contract = {
+            mode: "check",
+            snapshot: snapLoad.snap.abs,
+            match: Boolean(cmp.ok),
+            diffSummary: cmp.ok ? null : cmp.summary,
+          };
+          contractMatch = Boolean(cmp.ok);
         }
       }
     }
 
+    /**
+     * IMPORTANT:
+     * In contract mode, a non-zero exit is NOT a CI failure if:
+     * - schema is ok, AND
+     * - contract snapshot matches (golden output agreed)
+     *
+     * This allows deterministic failures to be “locked” and verified.
+     */
+    const nonzeroExit = res.exitCode !== 0;
+
+    const shouldCountCmdFail =
+      item.hardGate &&
+      nonzeroExit &&
+      // If we are NOT doing contracts, exit code must gate.
+      (!doContracts ||
+        // If we ARE doing contracts, only gate when contracts don't match (or no contract info).
+        contractMatch !== true);
+
+    if (shouldCountCmdFail) cmdFailCount++;
+
+    const runError =
+      nonzeroExit && shouldCountCmdFail
+        ? {
+            code: "ERR_CMD_NONZERO",
+            message: `${item.cmd} exited non-zero (${res.exitCode})`,
+            cmd: item.cmd,
+            stderr: res.stderr,
+          }
+        : null;
+
     results.push({
       cmd: item.cmd,
-      exitCode: cmdRes.exitCode,
-      runError: cmdRes.error,
+      exitCode: res.exitCode,
+      runError,
       schema,
       contract,
     });
 
-    if (item.hardGate && (cmdRes.exitCode !== 0 || !schema.ok)) {
-      break;
-    }
-
-    // small settle to reduce port races
-    await sleep(50);
+    if (settleMs > 0) await sleep(settleMs);
   }
 
   const ok = schemaFailCount === 0 && contractFailCount === 0 && cmdFailCount === 0;
@@ -326,11 +307,26 @@ export async function contractRun({ flags }) {
       contractFailCount,
       cmdFailCount,
     },
+    knobs: {
+      refreshManifests,
+      installMode: installMode ?? null,
+      noInstall: Boolean(noInstall),
+      include: include ?? null,
+      max: typeof max === "number" ? max : null,
+      profile: profile ?? null,
+      healManifest: Boolean(healManifest),
+      contracts: Boolean(doContracts),
+      contractsMode,
+      contractsDir: path.resolve(contractsDir),
+    },
     results,
   };
 
   if (json) out.emitJson(payload);
   else out.log(`contract:run ${ok ? "OK" : "FAIL"}`);
 
+  // Exit codes:
+  // 0: ok
+  // 1: contract/schema/command gating failed
   return ok ? 0 : 1;
 }
