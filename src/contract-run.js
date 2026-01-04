@@ -123,7 +123,7 @@ async function ensureDiagnosticsFixtures(baseDirAbs) {
           version: "1.0.0",
           private: true,
           scripts: {
-            preinstall: "node -e \"process.exit(1)\"",
+            preinstall: 'node -e "process.exit(1)"',
             start: "node server.js",
           },
         });
@@ -160,7 +160,7 @@ server.listen(port, "127.0.0.1", () => {});
           version: "1.0.0",
           private: true,
           scripts: {
-            start: "node -e \"process.exit(3)\"",
+            start: 'node -e "process.exit(3)"',
           },
         });
 
@@ -266,10 +266,13 @@ server.listen(port, "127.0.0.1", () => {});
         );
 
         // Write a valid manifest first, then deliberately corrupt fingerprint to force drift deterministically.
-        const { manifestPath, fingerprint } = await initManifestForFixture(appAbs, { template: "fixture" });
+        const { manifestPath, fingerprint } = await initManifestForFixture(appAbs, {
+          template: "fixture",
+        });
         const raw = fs.readFileSync(manifestPath, "utf8");
         const parsed = JSON.parse(raw);
-        parsed.fingerprint = String(fingerprint).slice(0, 10) + "deadbeefdeadbeefdeadbeefdeadbeef";
+        parsed.fingerprint =
+          String(fingerprint).slice(0, 10) + "deadbeefdeadbeefdeadbeefdeadbeef";
         writeJsonFileAbs(manifestPath, parsed);
       },
       validateFlags: { installMode: "never" },
@@ -331,9 +334,7 @@ export async function contractRun({ flags }) {
     : "never";
 
   const doContracts = isTrueish(flags.contracts);
-  const contractsDir = flags["contracts-dir"]
-    ? String(flags["contracts-dir"])
-    : "ci/contracts";
+  const contractsDir = flags["contracts-dir"] ? String(flags["contracts-dir"]) : "ci/contracts";
 
   const contractsMode = flags["contracts-mode"]
     ? String(flags["contracts-mode"]).toLowerCase().trim()
@@ -365,6 +366,17 @@ export async function contractRun({ flags }) {
   const fixturesBaseAbs = path.resolve(process.cwd(), "ci", "fixtures", "diagnostics");
   const fixtureCases = await ensureDiagnosticsFixtures(fixturesBaseAbs);
 
+  // For deterministic contract snapshots: these commands must NOT point at a live outputs root.
+  // They must run against a stable fixtures root during contract snapshot/update/check.
+  const CONTRACT_FIXED_ROOT_KEYS = new Set(["validate:all", "report:ci"]);
+  const fixedContractRootAbs = fixturesBaseAbs;
+
+  function rootForItem(snapshotKey) {
+    if (!doContracts) return root;
+    if (CONTRACT_FIXED_ROOT_KEYS.has(String(snapshotKey))) return fixedContractRootAbs;
+    return root;
+  }
+
   // Commands:
   // - Keep existing gates first
   // - Then add validate fixture cases, each with its own snapshot key
@@ -373,8 +385,8 @@ export async function contractRun({ flags }) {
       cmd: "validate:all",
       schemaCmd: "validate:all",
       snapshotKey: "validate:all",
-      args: () => {
-        const a = ["--root", root, "--json", "--quiet"];
+      args: (runRoot) => {
+        const a = ["--root", runRoot, "--json", "--quiet"];
         if (noInstall) a.push("--no-install");
         else if (installMode) a.push("--install-mode", String(installMode));
         if (profile) a.push("--profile", String(profile));
@@ -389,8 +401,8 @@ export async function contractRun({ flags }) {
       cmd: "report:ci",
       schemaCmd: "report:ci",
       snapshotKey: "report:ci",
-      args: () => {
-        const a = ["--root", root, "--json", "--quiet"];
+      args: (runRoot) => {
+        const a = ["--root", runRoot, "--json", "--quiet"];
         if (noInstall) a.push("--no-install");
         else if (installMode) a.push("--install-mode", String(installMode));
         if (profile) a.push("--profile", String(profile));
@@ -427,7 +439,11 @@ export async function contractRun({ flags }) {
 
     const node = process.execPath;
     const entry = path.resolve(process.cwd(), "index.js");
-    const args = [entry, item.cmd, ...item.args()];
+
+    const runRoot = rootForItem(item.snapshotKey);
+    const argvTail = typeof item.args === "function" ? item.args(runRoot) : [];
+
+    const args = [entry, item.cmd, ...argvTail];
 
     const res = await new Promise((resolve) => {
       const child = spawn(node, args, {
@@ -607,6 +623,11 @@ export async function contractRun({ flags }) {
       contractsMode,
       contractsDir: path.resolve(contractsDir),
       fixturesDir: fixturesBaseAbs,
+      contractRoots: {
+        defaultRoot: path.resolve(root),
+        fixedRoot: fixedContractRootAbs,
+        fixedKeys: Array.from(CONTRACT_FIXED_ROOT_KEYS.values()),
+      },
     },
     results,
   };
