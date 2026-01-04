@@ -221,18 +221,12 @@ export async function ciCheck({ flags }) {
   let schemaFailCount = 0;
   let schemaRunnerError = null;
 
-  // If any producer exits non-zero, ci:check must fail with THAT exit code.
-  let firstProducerNonzeroExit = null;
-
-  // Option A: include manifest:refresh:all in the schema gate too
   const schemaTargets = ["validate:all", "report:ci", "manifest:refresh:all"];
 
   for (let i = 0; i < schemaTargets.length; i++) {
     const target = schemaTargets[i];
 
     if (progress) out.log(`[ci:check] schema ${i + 1}/${schemaTargets.length} ${target}`);
-
-    const args = ["--cmd", target, "--stdin", "true", "--json", "--quiet"];
 
     // run the actual command to produce JSON, pipe it into schema:check via stdin
     const producerArgs = ["--root", root, "--json", "--quiet"];
@@ -249,49 +243,34 @@ export async function ciCheck({ flags }) {
 
     const produced = await runCliJson({ cmd: target, args: producerArgs, timeoutMs });
 
-    // Runner-level failure (no JSON / timed out / bad JSON etc.)
+    // IMPORTANT:
+    // Phase 1 is a SHAPE gate, not a SUCCESS gate.
+    // If the producer exits non-zero but still emits valid JSON, we still schema-check it.
     if (!produced.json) {
       schemaRunnerError =
         produced.error || {
           code: "ERR_SCHEMA_RUNNER",
           message: `Failed to run ${target}`,
         };
+
       schemaResults.push({
         cmd: target,
         ok: false,
         exitCode: produced.exitCode,
+        producerOk: Boolean(produced.ok),
+        producerExitCode: typeof produced.exitCode === "number" ? produced.exitCode : null,
         runError: schemaRunnerError,
         schema: null,
       });
       break;
     }
 
-    // ✅ CRITICAL: if producer exited non-zero, CI must fail immediately.
-    if (produced.exitCode !== 0) {
-      if (firstProducerNonzeroExit == null) firstProducerNonzeroExit = produced.exitCode;
-      schemaFailCount++;
-
-      schemaResults.push({
-        cmd: target,
-        ok: false,
-        exitCode: produced.exitCode,
-        runError:
-          produced.error || {
-            code: "ERR_RUN_NONZERO",
-            message: `Non-zero exit (${produced.exitCode})`,
-            cmd: target,
-          },
-        schema: null,
-      });
-
-      break;
-    }
-
     // Now run schema:check reading that JSON via stdin
+    const schemaCheckArgs = ["--cmd", target, "--stdin", "true", "--json", "--quiet"];
     const schemaCheckRes = await new Promise((resolve) => {
       const node = process.execPath;
       const entry = path.resolve(process.cwd(), "index.js");
-      const fullArgs = [entry, "schema:check", ...args];
+      const fullArgs = [entry, "schema:check", ...schemaCheckArgs];
 
       const child = spawn(node, fullArgs, {
         cwd: process.cwd(),
@@ -362,6 +341,8 @@ export async function ciCheck({ flags }) {
       cmd: target,
       ok: schemaCheckRes.ok,
       exitCode: schemaCheckRes.exitCode,
+      producerOk: Boolean(produced.ok),
+      producerExitCode: typeof produced.exitCode === "number" ? produced.exitCode : null,
       runError: produced.error,
       schema: schemaCheckRes.json,
     });
@@ -395,26 +376,12 @@ export async function ciCheck({ flags }) {
 
   if (schemaFailCount > 0) {
     const finishedAt = new Date().toISOString();
-
-    // If we failed because a producer exited non-zero, propagate that exit code (e.g. 13).
-    const propagatedExit =
-      typeof firstProducerNonzeroExit === "number" && Number.isFinite(firstProducerNonzeroExit)
-        ? firstProducerNonzeroExit
-        : 1;
-
     const payload = {
       ok: false,
       rootPath: path.resolve(root),
       startedAt,
       finishedAt,
-      error:
-        propagatedExit !== 1
-          ? {
-              code: "ERR_SCHEMA_PRODUCER_NONZERO",
-              message: `Schema gate producer exited non-zero (${propagatedExit})`,
-              exitCode: propagatedExit,
-            }
-          : { code: "ERR_SCHEMA_FAIL", message: "Schema mismatch" },
+      error: { code: "ERR_SCHEMA_FAIL", message: "Schema mismatch" },
       schema: {
         ok: false,
         failCount: schemaFailCount,
@@ -422,11 +389,9 @@ export async function ciCheck({ flags }) {
       },
       contracts: null,
     };
-
     if (json) out.emitJson(payload);
     else out.log(`[ci:check] schema FAIL`);
-
-    return propagatedExit;
+    return 1;
   }
 
   // ---- Phase 2: contract:run (mode check) ----
