@@ -60,7 +60,6 @@ function normalizeInstallMode(v) {
   if (!v || v === true) return undefined;
   const s = String(v).toLowerCase().trim();
   if (s === "always" || s === "never" || s === "if-missing") return s;
-  // invalid value -> ignore (validator/build will default deterministically)
   return undefined;
 }
 
@@ -75,9 +74,8 @@ function writeJsonFile(filePath, obj) {
   fs.writeFileSync(filePath, json, "utf8");
 }
 
-function printUsage() {
-  console.log(
-    `
+function getUsageText() {
+  return `
 ai-app-builder CLI
 
 Commands:
@@ -89,7 +87,9 @@ Commands:
   generate --from-plan <plan.json> [--out <path>] [--template <name>]
 
   build --prompt "<text>" [--out <path>] [--template <name>]
-        [--install-mode <always|never|if-missing>] [--dry-run] [--json] [--quiet]
+        [--install-mode <always|never|if-missing>] [--dry-run]
+        [--write-policy <refuse|merge-safe|overwrite>] [--yes]
+        [--json] [--quiet]
 
   validate --app <path> [--quiet] [--json] [--no-install]
            [--install-mode <always|never|if-missing>] [--out <file>] [--profile <name>]
@@ -110,7 +110,8 @@ Commands:
 
   drift:report --app <path> [--diff] [--json] [--quiet]
   regen:preview --app <path> [--json] [--quiet]
-  regen:apply --app <path> --yes [--overwriteModified] [--json] [--quiet]
+  regen:apply --app <path> --yes [--overwriteModified]
+             [--write-policy <merge-safe|overwrite>] [--json] [--quiet]
 
   schema:check --cmd <validate|validate:all|report:ci|manifest:refresh:all> (--file <path> | --stdin true)
                [--json] [--quiet]
@@ -121,31 +122,56 @@ Commands:
   contract:update --cmd <validate|validate:all|report:ci|manifest:refresh:all> (--file <path> | --stdin true)
                   [--contracts-dir <path>] [--json] [--quiet]
 
-Flags:
-  --from-plan <file>   Generate using a plan JSON artifact (Step 14 handshake)
-  --template <name>    Template name (explicit override)
-  --out <path>         Output folder path (or plan file output for plan)
+  contract:run --root <path> [--json] [--quiet] [--out <file>]
+               [--no-install] [--install-mode <always|never|if-missing>] [--profile <name>]
+               [--progress] [--max <n>] [--include <text>] [--heal-manifest]
+               [--refresh-manifests <never|after>] [--apply]
+               [--contracts true] [--contracts-dir <path>]
+               [--contracts-mode <check|update>]
 
-  --prompt <text>      Required for plan/build. Goal/requirements statement.
-  --dry-run            Build: plan + resolve only; no writes; no validate.
-  --quiet              Suppress human logs where supported (keeps JSON clean)
-  --json               Print ONLY the final JSON result (one line)
-  --no-install         Skip npm install (legacy; validate/validate:all/report:ci)
-  --install-mode       Install behavior: always|never|if-missing
-  --profile <n>        Override validation profile selection
-  --progress           Print progress lines to stderr (keeps JSON clean)
-  --max <n>            Limit number of apps processed (debug)
-  --include <text>     Only process app paths containing this substring
-  --heal-manifest      report:ci: allow report-ci runner to auto-refresh manifest when safe
+  ci:check --root <path> [--json] [--quiet]
+           [--no-install] [--install-mode <always|never|if-missing>] [--profile <name>]
+           [--progress] [--max <n>] [--include <text>] [--heal-manifest]
+           [--refresh-manifests <never|after>] [--apply]
+           [--contracts-dir <path>]
 
 CI convenience:
-  --ci                 Alias for --json --quiet (JSON-only + low-noise)
+  --ci                 Alias for --json --quiet
   --json-on-pipe true  If stdout is piped (not TTY), force --json
-`.trim()
-  );
+`.trim();
 }
 
-// Minimal, deterministic app discovery: directories under root that contain builder.manifest.json
+function printUsage() {
+  console.log(getUsageText());
+}
+
+function classifyCliError(err, cmd) {
+  const message = err?.message || String(err || "");
+  const msg = String(message);
+
+  const usageSignals = [
+    "Missing required flag:",
+    "Unknown command:",
+    "does not exist or is not a directory:",
+    "does not exist",
+    "is not a directory",
+  ];
+
+  const isUsage =
+    usageSignals.some((s) => msg.includes(s)) ||
+    (cmd === "schema:check" && msg.includes("--cmd")) ||
+    (cmd === "contract:check" && msg.includes("--cmd")) ||
+    (cmd === "contract:update" && msg.includes("--cmd")) ||
+    (cmd === "contract:run" && msg.includes("--root")) ||
+    (cmd === "ci:check" && msg.includes("--root"));
+
+  return {
+    exitCode: 2,
+    errorCode: isUsage ? "ERR_INPUT" : "ERR_RUNTIME",
+    message: msg,
+  };
+}
+
 function discoverApps(rootPath, { include, max } = {}) {
   const absRoot = path.isAbsolute(rootPath)
     ? rootPath
@@ -157,7 +183,6 @@ function discoverApps(rootPath, { include, max } = {}) {
 
   const entries = fs.readdirSync(absRoot, { withFileTypes: true });
   let dirs = entries.filter((e) => e.isDirectory()).map((e) => e.name);
-
   dirs.sort((a, b) => a.localeCompare(b));
 
   const apps = [];
@@ -170,9 +195,7 @@ function discoverApps(rootPath, { include, max } = {}) {
     const manifestPath = path.join(abs, "builder.manifest.json");
     if (fs.existsSync(manifestPath) && fs.statSync(manifestPath).isFile()) {
       apps.push({ relPath: rel, absPath: abs });
-      if (typeof max === "number" && Number.isFinite(max) && apps.length >= max) {
-        break;
-      }
+      if (typeof max === "number" && Number.isFinite(max) && apps.length >= max) break;
     }
   }
 
@@ -182,12 +205,8 @@ function discoverApps(rootPath, { include, max } = {}) {
 async function main() {
   const { cmd, flags } = parseArgs(process.argv);
 
-  // Step 31: CI contract hardening (minimal + deterministic)
   const ciMode = hasFlag(flags, "ci");
   const jsonOnPipe = isTrueish(flags["json-on-pipe"]);
-
-  // IMPORTANT: On Windows with cmd redirection, isTTY can be undefined.
-  // Treat anything that is NOT explicitly true as "piped/not-a-tty".
   const stdoutNotTty = Boolean(process.stdout && process.stdout.isTTY !== true);
 
   if (ciMode) {
@@ -202,7 +221,19 @@ async function main() {
   const jsonMode = hasFlag(flags, "json") || ciMode || (jsonOnPipe && stdoutNotTty);
 
   try {
-    if (!cmd || cmd === "help" || cmd === "--help" || cmd === "-h") {
+    const isHelp = !cmd || cmd === "help" || cmd === "--help" || cmd === "-h";
+
+    if (isHelp) {
+      const usage = getUsageText();
+
+      if (jsonMode) {
+        process.stderr.write(usage + "\n");
+        process.stdout.write(
+          JSON.stringify({ ok: true, cmd: "help", usageOnStderr: true }) + "\n"
+        );
+        process.exit(0);
+      }
+
       printUsage();
       process.exit(0);
     }
@@ -210,11 +241,7 @@ async function main() {
     if (cmd === "templates:list") {
       const json = hasFlag(flags, "json");
       const mod = await import("./src/templates.js");
-      const fn = pickExport(
-        mod,
-        ["templatesList", "listTemplates"],
-        "./src/templates.js"
-      );
+      const fn = pickExport(mod, ["templatesList", "listTemplates"], "./src/templates.js");
       await fn({ json });
       return;
     }
@@ -240,6 +267,20 @@ async function main() {
       return;
     }
 
+    if (cmd === "contract:run") {
+      const mod = await import("./src/contract-run.js");
+      const fn = pickExport(mod, ["contractRun"], "./src/contract-run.js");
+      const exitCode = await fn({ flags });
+      process.exit(typeof exitCode === "number" ? exitCode : 2);
+    }
+
+    if (cmd === "ci:check") {
+      const mod = await import("./src/ci-check.js");
+      const fn = pickExport(mod, ["ciCheck"], "./src/ci-check.js");
+      const exitCode = await fn({ flags });
+      process.exit(typeof exitCode === "number" ? exitCode : 2);
+    }
+
     if (cmd === "plan") {
       const prompt = requireFlag(flags, "prompt");
       const json = hasFlag(flags, "json");
@@ -252,9 +293,7 @@ async function main() {
       const plan = fn(prompt);
 
       if (out) {
-        const resolved = path.isAbsolute(out)
-          ? out
-          : path.resolve(process.cwd(), String(out));
+        const resolved = path.isAbsolute(out) ? out : path.resolve(process.cwd(), String(out));
         writeJsonFile(resolved, plan);
       }
 
@@ -264,9 +303,7 @@ async function main() {
         process.stdout.write("=== PLAN MODE ===\n");
         process.stdout.write(`Goal: ${plan.goal}\n\n`);
         process.stdout.write("Steps:\n");
-        for (const s of plan.steps) {
-          process.stdout.write(`- ${s.id}: ${s.title}\n`);
-        }
+        for (const s of plan.steps) process.stdout.write(`- ${s.id}: ${s.title}\n`);
         process.stdout.write("\nTip: use --json for CI-stable output.\n");
       }
 
@@ -276,31 +313,16 @@ async function main() {
     if (cmd === "generate") {
       const fromPlan = flags["from-plan"] ? String(flags["from-plan"]) : "";
 
-      // Step 14 path: generate from plan artifact
       if (fromPlan) {
         const planMod = await import("./src/plan-handoff.js");
-        const loadFn = pickExport(
-          planMod,
-          ["loadPlanFromFile"],
-          "./src/plan-handoff.js"
-        );
-        const selectFn = pickExport(
-          planMod,
-          ["selectTemplateFromPlan"],
-          "./src/plan-handoff.js"
-        );
-        const defaultOutFn = pickExport(
-          planMod,
-          ["defaultOutPathFromPlan"],
-          "./src/plan-handoff.js"
-        );
+        const loadFn = pickExport(planMod, ["loadPlanFromFile"], "./src/plan-handoff.js");
+        const selectFn = pickExport(planMod, ["selectTemplateFromPlan"], "./src/plan-handoff.js");
+        const defaultOutFn = pickExport(planMod, ["defaultOutPathFromPlan"], "./src/plan-handoff.js");
 
         const { plan } = loadFn(fromPlan);
 
-        // Template selection
         const explicitTemplate = flags.template ? String(flags.template) : "";
         let template = explicitTemplate;
-
         let notes = [];
         if (!template) {
           const selected = selectFn(plan);
@@ -308,24 +330,17 @@ async function main() {
           notes = Array.isArray(selected.notes) ? selected.notes : [];
         }
 
-        // Out path selection
         const out = flags.out ? String(flags.out) : "";
         const outPath = out ? out : defaultOutFn(plan);
 
-        // Call existing generate implementation
         const mod = await import("./src/generate.js");
         const fn = pickExport(mod, ["generateApp", "generate"], "./src/generate.js");
         await fn({ template, outPath });
 
-        // Optional deterministic note output to stderr only
-        if (notes.length) {
-          for (const n of notes) process.stderr.write(`[plan->generate] ${n}\n`);
-        }
-
+        if (notes.length) for (const n of notes) process.stderr.write(`[plan->generate] ${n}\n`);
         return;
       }
 
-      // Legacy path: explicit template + out required
       const template = requireFlag(flags, "template");
       const out = requireFlag(flags, "out");
 
@@ -339,7 +354,7 @@ async function main() {
       const mod = await import("./src/build.js");
       const fn = pickExport(mod, ["buildCommand"], "./src/build.js");
       const exitCode = await fn({ flags });
-      process.exit(exitCode);
+      process.exit(typeof exitCode === "number" ? exitCode : 2);
     }
 
     if (cmd === "validate") {
@@ -355,15 +370,7 @@ async function main() {
       const mod = await import("./src/validate.js");
       const fn = pickExport(mod, ["validateApp", "validate"], "./src/validate.js");
 
-      await fn({
-        appPath: app,
-        json,
-        quiet,
-        noInstall,
-        installMode,
-        outPath: out,
-        profile,
-      });
+      await fn({ appPath: app, json, quiet, noInstall, installMode, outPath: out, profile });
       return;
     }
 
@@ -384,18 +391,7 @@ async function main() {
       const mod = await import("./src/validate-all.js");
       const fn = pickExport(mod, ["validateAll"], "./src/validate-all.js");
 
-      await fn({
-        rootPath: root,
-        json,
-        quiet,
-        noInstall,
-        installMode,
-        outPath: out,
-        profile,
-        progress,
-        max,
-        include,
-      });
+      await fn({ rootPath: root, json, quiet, noInstall, installMode, outPath: out, profile, progress, max, include });
       return;
     }
 
@@ -417,24 +413,7 @@ async function main() {
       const mod = await import("./src/report-ci.js");
       const fn = pickExport(mod, ["reportCi"], "./src/report-ci.js");
 
-      await fn({
-        root,
-        rootPath: root,
-
-        json,
-        quiet,
-        noInstall,
-
-        installMode,
-        outPath: out,
-        profile,
-
-        progress,
-        max,
-        include,
-
-        healManifest,
-      });
+      await fn({ root, rootPath: root, json, quiet, noInstall, installMode, outPath: out, profile, progress, max, include, healManifest });
       return;
     }
 
@@ -491,26 +470,14 @@ async function main() {
 
       for (let i = 0; i < apps.length; i++) {
         const a = apps[i];
-        if (progress) {
-          process.stderr.write(
-            `[manifest:refresh:all] ${i + 1}/${apps.length} ${a.relPath}\n`
-          );
-        }
+        if (progress) process.stderr.write(`[manifest:refresh:all] ${i + 1}/${apps.length} ${a.relPath}\n`);
         try {
           const r = await fn({ appPath: a.relPath, apply, templateDir });
           okCount++;
-          results.push({
-            appPath: a.relPath,
-            ok: true,
-            result: r ?? null,
-          });
+          results.push({ appPath: a.relPath, ok: true, result: r ?? null });
         } catch (e) {
           failCount++;
-          results.push({
-            appPath: a.relPath,
-            ok: false,
-            error: e?.message || String(e),
-          });
+          results.push({ appPath: a.relPath, ok: false, error: e?.message || String(e) });
         }
       }
 
@@ -553,7 +520,6 @@ async function main() {
 
       const mod = await import("./src/diff.js");
       const fn = pickExport(mod, ["driftReport", "reportDrift"], "./src/diff.js");
-
       await fn({ appPath: app, diff, json, quiet });
       return;
     }
@@ -565,7 +531,6 @@ async function main() {
 
       const mod = await import("./src/regen.js");
       const fn = pickExport(mod, ["regenPreview"], "./src/regen.js");
-
       await fn({ appPath: app, json, quiet });
       return;
     }
@@ -577,33 +542,32 @@ async function main() {
       const json = hasFlag(flags, "json");
       const quiet = hasFlag(flags, "quiet");
 
+      const writePolicy = flags["write-policy"] ?? flags.writePolicy;
+
       const mod = await import("./src/regen.js");
       const fn = pickExport(mod, ["regenApply"], "./src/regen.js");
 
-      await fn({ appPath: app, yes, overwriteModified, json, quiet });
+      await fn({ appPath: app, yes, overwriteModified, writePolicy, json, quiet });
       return;
     }
 
     throw new Error(`Unknown command: ${cmd}`);
   } catch (err) {
-    const message = err?.message || String(err);
+    const classified = classifyCliError(err, cmd);
+    const message = classified.message;
 
     if (jsonMode) {
       process.stdout.write(
         JSON.stringify({
           ok: false,
-          error: {
-            code: "ERR_CLI",
-            message,
-            cmd: cmd || null,
-          },
+          error: { code: classified.errorCode, message, cmd: cmd || null },
         }) + "\n"
       );
-      process.exit(1);
+      process.exit(classified.exitCode);
     }
 
     console.error(`[error] ${message}`);
-    process.exit(1);
+    process.exit(classified.exitCode);
   }
 }
 
