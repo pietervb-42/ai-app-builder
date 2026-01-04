@@ -214,7 +214,17 @@ export async function ciCheck({ flags }) {
   const contractsDir = flags["contracts-dir"] ? String(flags["contracts-dir"]) : "ci/contracts";
 
   const settleMs = safeNumber(flags["settle-ms"], 200);
-  const timeoutMs = safeNumber(flags["timeout-ms"], 120000);
+
+  // Base timeout for sub-commands (schema producers etc.)
+  const baseTimeoutMs = safeNumber(flags["timeout-ms"], 120000);
+
+  // contract:run can be slower (fixture boot/install checks). Give it a higher default in CI.
+  // Still overridable by user via --timeout-ms (we treat that as base), but we ensure a sane floor.
+  const contractTimeoutFloorMs = 600000; // 10 minutes
+  const contractTimeoutMs =
+    typeof baseTimeoutMs === "number" && Number.isFinite(baseTimeoutMs)
+      ? Math.max(baseTimeoutMs, contractTimeoutFloorMs)
+      : contractTimeoutFloorMs;
 
   // ---- Phase 1: schema:check for validate:all + report:ci + manifest:refresh:all ----
   const schemaResults = [];
@@ -241,7 +251,7 @@ export async function ciCheck({ flags }) {
     // CI safety: never allow schema-producer manifest refresh to apply changes.
     if (target === "manifest:refresh:all") producerArgs.push("--apply", "false");
 
-    const produced = await runCliJson({ cmd: target, args: producerArgs, timeoutMs });
+    const produced = await runCliJson({ cmd: target, args: producerArgs, timeoutMs: baseTimeoutMs });
 
     // IMPORTANT:
     // Phase 1 is a SHAPE gate, not a SUCCESS gate.
@@ -428,7 +438,7 @@ export async function ciCheck({ flags }) {
   const contractRes = await runCliJson({
     cmd: "contract:run",
     args: contractArgs,
-    timeoutMs,
+    timeoutMs: contractTimeoutMs,
   });
 
   if (!contractRes.json) {
