@@ -134,6 +134,26 @@ function deepCloneJson(x) {
   return JSON.parse(JSON.stringify(x));
 }
 
+/**
+ * Golden contracts for ERR_HEALTH_CONNREFUSED currently pin a specific port in the
+ * error message string, e.g. "connect ECONNREFUSED 127.0.0.1:50745".
+ *
+ * Runtime chooses an arbitrary unused port, so we normalize *that message* to the
+ * pinned port to match existing snapshots without updating them.
+ */
+function normalizeConnRefusedMessage(s) {
+  if (typeof s !== "string") return s;
+  const t = s;
+  // Examples:
+  // "connect ECONNREFUSED 127.0.0.1:12345"
+  // "connect ECONNREFUSED ::1:12345"
+  // Some Node variants may include brackets in other contexts; we handle common forms.
+  return t.replace(
+    /\bconnect\s+ECONNREFUSED\s+(127\.0\.0\.1|localhost|\[::1\]|::1):(\d+)\b/gi,
+    (_m, host) => `connect ECONNREFUSED ${host}:50745`
+  );
+}
+
 function normalizeInPlace(node) {
   if (Array.isArray(node)) {
     for (const v of node) normalizeInPlace(v);
@@ -155,7 +175,10 @@ function normalizeInPlace(node) {
       continue;
     }
 
-    // URLs are volatile due to local ports.
+    /**
+     * URLs are volatile due to local ports.
+     * Golden snapshots expect URL fields to be blanked ("").
+     */
     if (shouldNormalizeKeyAsUrl(key) && typeof val === "string") {
       node[key] = "";
       continue;
@@ -199,6 +222,15 @@ function normalizeInPlace(node) {
       continue;
     }
 
+    // Normalize the specific ECONNREFUSED message port to match golden snapshots.
+    if (key === "message" && typeof val === "string") {
+      const fixed = normalizeConnRefusedMessage(val);
+      if (fixed !== val) {
+        node[key] = fixed;
+        continue;
+      }
+    }
+
     // Also normalize any ISO-like strings even if the key isn't known.
     if (typeof val === "string" && looksLikeIsoDateString(val)) {
       node[key] = null;
@@ -215,6 +247,15 @@ function normalizeInPlace(node) {
     if (typeof val === "string" && looksLikeHexHashString(val)) {
       node[key] = "<HASH>";
       continue;
+    }
+
+    // As a last safety: if some message-like field contains ECONNREFUSED, fix it too.
+    if (typeof val === "string" && /ECONNREFUSED/i.test(val)) {
+      const fixed = normalizeConnRefusedMessage(val);
+      if (fixed !== val) {
+        node[key] = fixed;
+        continue;
+      }
     }
   }
 }
