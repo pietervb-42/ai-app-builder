@@ -1,0 +1,106 @@
+{
+  "__contractCmd": "templates:inventory",
+  "payload": {
+    "cmd": "templates:inventory",
+    "notes": [
+      "Deterministic output: files are sorted lexicographically; paths use forward slashes.",
+      "Hashes are sha256 over file contents; templateHash is sha256 over the stable file list string.",
+      "Common junk folders are ignored (node_modules, .git, dist, build, etc.)."
+    ],
+    "ok": true,
+    "templates": [
+      {
+        "error": null,
+        "fileCount": 4,
+        "files": [
+          {
+            "bytes": 292,
+            "path": "index.js",
+            "sha256": "<HASH>"
+          },
+          {
+            "bytes": 205,
+            "path": "package.json",
+            "sha256": "<HASH>"
+          },
+          {
+            "bytes": 109,
+            "path": "README.md",
+            "sha256": "<HASH>"
+          },
+          {
+            "bytes": 87,
+            "path": "TEMPLATE.md",
+            "sha256": "<HASH>"
+          }
+        ],
+        "id": "node-express-api",
+        "ok": true,
+        "templateHash": "<HASH>",
+        "totalBytes": 693
+      },
+      {
+        "error": null,
+        "fileCount": 5,
+        "files": [
+          {
+            "bytes": 964,
+            "path": "db/index.js",
+            "sha256": "<HASH>"
+          },
+          {
+            "bytes": 2667,
+            "path": "index.js",
+            "sha256": "<HASH>"
+          },
+          {
+            "bytes": 254,
+            "path": "package.json",
+            "sha256": "<HASH>"
+          },
+          {
+            "bytes": 298,
+            "path": "README.md",
+            "sha256": "<HASH>"
+          },
+          {
+            "bytes": 463,
+            "path": "TEMPLATE.md",
+            "sha256": "<HASH>"
+          }
+        ],
+        "id": "node-express-api-sqlite",
+        "ok": true,
+        "templateHash": "<HASH>",
+        "totalBytes": 4646
+      },
+      {
+        "error": null,
+        "fileCount": 3,
+        "files": [
+          {
+            "bytes": 29,
+            "path": "index.js",
+            "sha256": "<HASH>"
+          },
+          {
+            "bytes": 147,
+            "path": "package.json",
+            "sha256": "<HASH>"
+          },
+          {
+            "bytes": 191,
+            "path": "TEMPLATE.md",
+            "sha256": "<HASH>"
+          }
+        ],
+        "id": "node-hello",
+        "ok": true,
+        "templateHash": "<HASH>",
+        "totalBytes": 367
+      }
+    ],
+    "templatesCount": 3,
+    "templatesDir": "templates"
+  }
+}

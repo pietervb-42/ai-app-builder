@@ -1,79 +1,116 @@
 {
   "__contractCmd": "report:ci",
   "payload": {
-    "appsDiscovered": 11,
-    "appsFound": 11,
+    "appsDiscovered": 5,
+    "appsFound": 5,
     "finishedAt": null,
-    "hardFailCount": 0,
+    "hardFailCount": 4,
     "healManifest": false,
     "include": null,
     "installMode": null,
     "max": null,
-    "ok": true,
+    "ok": false,
     "passCount": 0,
     "profile": null,
     "results": [
       {
         "appPath": "<PATH>",
         "ci": {
-          "hardFail": false,
-          "reason": "manifest_integrity",
-          "severity": "warn",
-          "warn": true
+          "hardFail": true,
+          "reason": "failure:HEALTH_FAIL:health",
+          "severity": "fail",
+          "warn": false
         },
         "ciAfterHeal": null,
-        "exitCode": 13,
+        "exitCode": 11,
         "healedManifest": null,
         "validate": {
           "appPath": "<PATH>",
-          "didInstall": false,
+          "didInstall": true,
           "installMode": "always",
           "manifestIntegrity": {
             "currentFingerprint": "<HASH>",
-            "error": {
-              "code": "ERR_MANIFEST_DRIFT",
-              "details": {
-                "currentFingerprint": "<HASH>",
-                "expectedFingerprint": "<HASH>"
-              },
-              "message": "Manifest fingerprint does not match current app fingerprint (drift detected)."
-            },
             "expectedFingerprint": "<HASH>",
             "manifestPath": "<PATH>",
-            "ok": false
+            "matches": true,
+            "ok": true
           },
           "ok": false,
-          "profile": "node-express-api-sqlite",
-          "template": "node-express-api-sqlite",
+          "profile": "fixture",
+          "template": "fixture",
           "validation": {
             "appPath": "<PATH>",
             "baseUrl": null,
             "checks": [
               {
-                "class": "SCHEMA_FAIL",
+                "class": "HEALTH_FAIL",
                 "details": {
-                  "code": "ERR_MANIFEST_INTEGRITY",
-                  "currentFingerprint": "<HASH>",
-                  "details": {
-                    "currentFingerprint": "<HASH>",
-                    "expectedFingerprint": "<HASH>"
-                  },
-                  "expectedFingerprint": "<HASH>",
-                  "integrityErrorCode": "ERR_MANIFEST_DRIFT",
-                  "manifestPath": "<PATH>",
-                  "message": "Manifest fingerprint does not match current app fingerprint (drift detected)."
+                  "code": "ERR_HEALTH_CONNREFUSED",
+                  "message": "connect ECONNREFUSED 127.0.0.1:50745",
+                  "url": ""
                 },
-                "id": "manifest_integrity",
+                "id": "health",
                 "ok": false,
                 "required": true
               }
             ],
             "durationMs": 0,
-            "failureClass": "SCHEMA_FAIL",
+            "failureClass": "HEALTH_FAIL",
             "finishedAt": null,
             "ok": false,
             "startedAt": null,
-            "template": "node-express-api-sqlite"
+            "template": "fixture"
+          }
+        },
+        "validateAfterHeal": null
+      },
+      {
+        "appPath": "<PATH>",
+        "ci": {
+          "hardFail": true,
+          "reason": "failure:HEALTH_FAIL:health",
+          "severity": "fail",
+          "warn": false
+        },
+        "ciAfterHeal": null,
+        "exitCode": 11,
+        "healedManifest": null,
+        "validate": {
+          "appPath": "<PATH>",
+          "didInstall": true,
+          "installMode": "always",
+          "manifestIntegrity": {
+            "currentFingerprint": "<HASH>",
+            "expectedFingerprint": "<HASH>",
+            "manifestPath": "<PATH>",
+            "matches": true,
+            "ok": true
+          },
+          "ok": false,
+          "profile": "fixture",
+          "template": "fixture",
+          "validation": {
+            "appPath": "<PATH>",
+            "baseUrl": null,
+            "checks": [
+              {
+                "class": "HEALTH_FAIL",
+                "details": {
+                  "code": "ERR_HEALTH_TIMEOUT",
+                  "message": "Health request timed out.",
+                  "url": ""
+                },
+                "id": "health",
+                "ok": false,
+                "required": true
+              }
+            ],
+            "durationMs": 0,
+            "failureClass": "HEALTH_FAIL",
+            "finishedAt": null,
+            "ok": false,
+            "startedAt": null,
+            "template": "fixture"
           }
         },
         "validateAfterHeal": null
@@ -108,8 +145,8 @@
             "ok": false
           },
           "ok": false,
-          "profile": "node-express-api-sqlite",
-          "template": "node-express-api-sqlite",
+          "profile": "fixture",
+          "template": "fixture",
           "validation": {
             "appPath": "<PATH>",
             "baseUrl": null,
@@ -138,7 +175,7 @@
             "finishedAt": null,
             "ok": false,
             "startedAt": null,
-            "template": "node-express-api-sqlite"
+            "template": "fixture"
           }
         },
         "validateAfterHeal": null
@@ -146,13 +183,13 @@
       {
         "appPath": "<PATH>",
         "ci": {
-          "hardFail": false,
-          "reason": "manifest_integrity",
-          "severity": "warn",
-          "warn": true
+          "hardFail": true,
+          "reason": "failure:BOOT_FAIL:install",
+          "severity": "fail",
+          "warn": false
         },
         "ciAfterHeal": null,
-        "exitCode": 13,
+        "exitCode": 10,
         "healedManifest": null,
         "validate": {
           "appPath": "<PATH>",
@@ -160,50 +197,37 @@
           "installMode": "always",
           "manifestIntegrity": {
             "currentFingerprint": "<HASH>",
-            "error": {
-              "code": "ERR_MANIFEST_DRIFT",
-              "details": {
-                "currentFingerprint": "<HASH>",
-                "expectedFingerprint": "<HASH>"
-              },
-              "message": "Manifest fingerprint does not match current app fingerprint (drift detected)."
-            },
             "expectedFingerprint": "<HASH>",
             "manifestPath": "<PATH>",
-            "ok": false
+            "matches": true,
+            "ok": true
           },
           "ok": false,
-          "profile": "node-express-api-sqlite",
-          "template": "node-express-api-sqlite",
+          "profile": "fixture",
+          "template": "fixture",
           "validation": {
             "appPath": "<PATH>",
             "baseUrl": null,
             "checks": [
               {
-                "class": "SCHEMA_FAIL",
+                "class": "BOOT_FAIL",
                 "details": {
-                  "code": "ERR_MANIFEST_INTEGRITY",
-                  "currentFingerprint": "<HASH>",
-                  "details": {
-                    "currentFingerprint": "<HASH>",
-                    "expectedFingerprint": "<HASH>"
-                  },
-                  "expectedFingerprint": "<HASH>",
-                  "integrityErrorCode": "ERR_MANIFEST_DRIFT",
-                  "manifestPath": "<PATH>",
-                  "message": "Manifest fingerprint does not match current app fingerprint (drift detected)."
+                  "code": "ERR_NPM_INSTALL_EXIT",
+                  "exitCode": 1,
+                  "installMode": "always",
+                  "message": "npm install failed (exit 1)."
                 },
-                "id": "manifest_integrity",
+                "id": "install",
                 "ok": false,
                 "required": true
               }
             ],
             "durationMs": 0,
-            "failureClass": "SCHEMA_FAIL",
+            "failureClass": "BOOT_FAIL",
             "finishedAt": null,
             "ok": false,
             "startedAt": null,
-            "template": "node-express-api-sqlite"
+            "template": "fixture"
           }
         },
         "validateAfterHeal": null
@@ -211,519 +235,51 @@
       {
         "appPath": "<PATH>",
         "ci": {
-          "hardFail": false,
-          "reason": "manifest_integrity",
-          "severity": "warn",
-          "warn": true
+          "hardFail": true,
+          "reason": "failure:BOOT_FAIL:start",
+          "severity": "fail",
+          "warn": false
         },
         "ciAfterHeal": null,
-        "exitCode": 13,
+        "exitCode": 10,
         "healedManifest": null,
         "validate": {
           "appPath": "<PATH>",
-          "didInstall": false,
+          "didInstall": true,
           "installMode": "always",
           "manifestIntegrity": {
             "currentFingerprint": "<HASH>",
-            "error": {
-              "code": "ERR_MANIFEST_DRIFT",
-              "details": {
-                "currentFingerprint": "<HASH>",
-                "expectedFingerprint": "<HASH>"
-              },
-              "message": "Manifest fingerprint does not match current app fingerprint (drift detected)."
-            },
             "expectedFingerprint": "<HASH>",
             "manifestPath": "<PATH>",
-            "ok": false
+            "matches": true,
+            "ok": true
           },
           "ok": false,
-          "profile": "node-express-api-sqlite",
-          "template": "node-express-api-sqlite",
+          "profile": "fixture",
+          "template": "fixture",
           "validation": {
             "appPath": "<PATH>",
             "baseUrl": null,
             "checks": [
               {
-                "class": "SCHEMA_FAIL",
+                "class": "BOOT_FAIL",
                 "details": {
-                  "code": "ERR_MANIFEST_INTEGRITY",
-                  "currentFingerprint": "<HASH>",
-                  "details": {
-                    "currentFingerprint": "<HASH>",
-                    "expectedFingerprint": "<HASH>"
-                  },
-                  "expectedFingerprint": "<HASH>",
-                  "integrityErrorCode": "ERR_MANIFEST_DRIFT",
-                  "manifestPath": "<PATH>",
-                  "message": "Manifest fingerprint does not match current app fingerprint (drift detected)."
+                  "code": "ERR_NPM_START_EXIT",
+                  "exitCode": 3,
+                  "message": "npm start exited early (exit 3).",
+                  "stdoutSnippet": "> fixture-err-npm-start-exit@1.0.0 start > node -e \"process.exit(3)\""
                 },
-                "id": "manifest_integrity",
+                "id": "start",
                 "ok": false,
                 "required": true
               }
             ],
             "durationMs": 0,
-            "failureClass": "SCHEMA_FAIL",
+            "failureClass": "BOOT_FAIL",
             "finishedAt": null,
             "ok": false,
             "startedAt": null,
-            "template": "node-express-api-sqlite"
-          }
-        },
-        "validateAfterHeal": null
-      },
-      {
-        "appPath": "<PATH>",
-        "ci": {
-          "hardFail": false,
-          "reason": "manifest_integrity",
-          "severity": "warn",
-          "warn": true
-        },
-        "ciAfterHeal": null,
-        "exitCode": 13,
-        "healedManifest": null,
-        "validate": {
-          "appPath": "<PATH>",
-          "didInstall": false,
-          "installMode": "always",
-          "manifestIntegrity": {
-            "currentFingerprint": "<HASH>",
-            "error": {
-              "code": "ERR_MANIFEST_DRIFT",
-              "details": {
-                "currentFingerprint": "<HASH>",
-                "expectedFingerprint": "<HASH>"
-              },
-              "message": "Manifest fingerprint does not match current app fingerprint (drift detected)."
-            },
-            "expectedFingerprint": "<HASH>",
-            "manifestPath": "<PATH>",
-            "ok": false
-          },
-          "ok": false,
-          "profile": "node-express-api-sqlite",
-          "template": "node-express-api-sqlite",
-          "validation": {
-            "appPath": "<PATH>",
-            "baseUrl": null,
-            "checks": [
-              {
-                "class": "SCHEMA_FAIL",
-                "details": {
-                  "code": "ERR_MANIFEST_INTEGRITY",
-                  "currentFingerprint": "<HASH>",
-                  "details": {
-                    "currentFingerprint": "<HASH>",
-                    "expectedFingerprint": "<HASH>"
-                  },
-                  "expectedFingerprint": "<HASH>",
-                  "integrityErrorCode": "ERR_MANIFEST_DRIFT",
-                  "manifestPath": "<PATH>",
-                  "message": "Manifest fingerprint does not match current app fingerprint (drift detected)."
-                },
-                "id": "manifest_integrity",
-                "ok": false,
-                "required": true
-              }
-            ],
-            "durationMs": 0,
-            "failureClass": "SCHEMA_FAIL",
-            "finishedAt": null,
-            "ok": false,
-            "startedAt": null,
-            "template": "node-express-api-sqlite"
-          }
-        },
-        "validateAfterHeal": null
-      },
-      {
-        "appPath": "<PATH>",
-        "ci": {
-          "hardFail": false,
-          "reason": "manifest_integrity",
-          "severity": "warn",
-          "warn": true
-        },
-        "ciAfterHeal": null,
-        "exitCode": 13,
-        "healedManifest": null,
-        "validate": {
-          "appPath": "<PATH>",
-          "didInstall": false,
-          "installMode": "always",
-          "manifestIntegrity": {
-            "currentFingerprint": "<HASH>",
-            "error": {
-              "code": "ERR_MANIFEST_DRIFT",
-              "details": {
-                "currentFingerprint": "<HASH>",
-                "expectedFingerprint": "<HASH>"
-              },
-              "message": "Manifest fingerprint does not match current app fingerprint (drift detected)."
-            },
-            "expectedFingerprint": "<HASH>",
-            "manifestPath": "<PATH>",
-            "ok": false
-          },
-          "ok": false,
-          "profile": "node-express-api-sqlite",
-          "template": "node-express-api-sqlite",
-          "validation": {
-            "appPath": "<PATH>",
-            "baseUrl": null,
-            "checks": [
-              {
-                "class": "SCHEMA_FAIL",
-                "details": {
-                  "code": "ERR_MANIFEST_INTEGRITY",
-                  "currentFingerprint": "<HASH>",
-                  "details": {
-                    "currentFingerprint": "<HASH>",
-                    "expectedFingerprint": "<HASH>"
-                  },
-                  "expectedFingerprint": "<HASH>",
-                  "integrityErrorCode": "ERR_MANIFEST_DRIFT",
-                  "manifestPath": "<PATH>",
-                  "message": "Manifest fingerprint does not match current app fingerprint (drift detected)."
-                },
-                "id": "manifest_integrity",
-                "ok": false,
-                "required": true
-              }
-            ],
-            "durationMs": 0,
-            "failureClass": "SCHEMA_FAIL",
-            "finishedAt": null,
-            "ok": false,
-            "startedAt": null,
-            "template": "node-express-api-sqlite"
-          }
-        },
-        "validateAfterHeal": null
-      },
-      {
-        "appPath": "<PATH>",
-        "ci": {
-          "hardFail": false,
-          "reason": "manifest_integrity",
-          "severity": "warn",
-          "warn": true
-        },
-        "ciAfterHeal": null,
-        "exitCode": 13,
-        "healedManifest": null,
-        "validate": {
-          "appPath": "<PATH>",
-          "didInstall": false,
-          "installMode": "always",
-          "manifestIntegrity": {
-            "currentFingerprint": "<HASH>",
-            "error": {
-              "code": "ERR_MANIFEST_DRIFT",
-              "details": {
-                "currentFingerprint": "<HASH>",
-                "expectedFingerprint": "<HASH>"
-              },
-              "message": "Manifest fingerprint does not match current app fingerprint (drift detected)."
-            },
-            "expectedFingerprint": "<HASH>",
-            "manifestPath": "<PATH>",
-            "ok": false
-          },
-          "ok": false,
-          "profile": "node-express-api-sqlite",
-          "template": "node-express-api-sqlite",
-          "validation": {
-            "appPath": "<PATH>",
-            "baseUrl": null,
-            "checks": [
-              {
-                "class": "SCHEMA_FAIL",
-                "details": {
-                  "code": "ERR_MANIFEST_INTEGRITY",
-                  "currentFingerprint": "<HASH>",
-                  "details": {
-                    "currentFingerprint": "<HASH>",
-                    "expectedFingerprint": "<HASH>"
-                  },
-                  "expectedFingerprint": "<HASH>",
-                  "integrityErrorCode": "ERR_MANIFEST_DRIFT",
-                  "manifestPath": "<PATH>",
-                  "message": "Manifest fingerprint does not match current app fingerprint (drift detected)."
-                },
-                "id": "manifest_integrity",
-                "ok": false,
-                "required": true
-              }
-            ],
-            "durationMs": 0,
-            "failureClass": "SCHEMA_FAIL",
-            "finishedAt": null,
-            "ok": false,
-            "startedAt": null,
-            "template": "node-express-api-sqlite"
-          }
-        },
-        "validateAfterHeal": null
-      },
-      {
-        "appPath": "<PATH>",
-        "ci": {
-          "hardFail": false,
-          "reason": "manifest_integrity",
-          "severity": "warn",
-          "warn": true
-        },
-        "ciAfterHeal": null,
-        "exitCode": 13,
-        "healedManifest": null,
-        "validate": {
-          "appPath": "<PATH>",
-          "didInstall": false,
-          "installMode": "always",
-          "manifestIntegrity": {
-            "currentFingerprint": "<HASH>",
-            "error": {
-              "code": "ERR_MANIFEST_DRIFT",
-              "details": {
-                "currentFingerprint": "<HASH>",
-                "expectedFingerprint": "<HASH>"
-              },
-              "message": "Manifest fingerprint does not match current app fingerprint (drift detected)."
-            },
-            "expectedFingerprint": "<HASH>",
-            "manifestPath": "<PATH>",
-            "ok": false
-          },
-          "ok": false,
-          "profile": "node-express-api-sqlite",
-          "template": "node-express-api-sqlite",
-          "validation": {
-            "appPath": "<PATH>",
-            "baseUrl": null,
-            "checks": [
-              {
-                "class": "SCHEMA_FAIL",
-                "details": {
-                  "code": "ERR_MANIFEST_INTEGRITY",
-                  "currentFingerprint": "<HASH>",
-                  "details": {
-                    "currentFingerprint": "<HASH>",
-                    "expectedFingerprint": "<HASH>"
-                  },
-                  "expectedFingerprint": "<HASH>",
-                  "integrityErrorCode": "ERR_MANIFEST_DRIFT",
-                  "manifestPath": "<PATH>",
-                  "message": "Manifest fingerprint does not match current app fingerprint (drift detected)."
-                },
-                "id": "manifest_integrity",
-                "ok": false,
-                "required": true
-              }
-            ],
-            "durationMs": 0,
-            "failureClass": "SCHEMA_FAIL",
-            "finishedAt": null,
-            "ok": false,
-            "startedAt": null,
-            "template": "node-express-api-sqlite"
-          }
-        },
-        "validateAfterHeal": null
-      },
-      {
-        "appPath": "<PATH>",
-        "ci": {
-          "hardFail": false,
-          "reason": "manifest_integrity",
-          "severity": "warn",
-          "warn": true
-        },
-        "ciAfterHeal": null,
-        "exitCode": 13,
-        "healedManifest": null,
-        "validate": {
-          "appPath": "<PATH>",
-          "didInstall": false,
-          "installMode": "always",
-          "manifestIntegrity": {
-            "currentFingerprint": "<HASH>",
-            "error": {
-              "code": "ERR_MANIFEST_DRIFT",
-              "details": {
-                "currentFingerprint": "<HASH>",
-                "expectedFingerprint": "<HASH>"
-              },
-              "message": "Manifest fingerprint does not match current app fingerprint (drift detected)."
-            },
-            "expectedFingerprint": "<HASH>",
-            "manifestPath": "<PATH>",
-            "ok": false
-          },
-          "ok": false,
-          "profile": "node-express-api-sqlite",
-          "template": "node-express-api-sqlite",
-          "validation": {
-            "appPath": "<PATH>",
-            "baseUrl": null,
-            "checks": [
-              {
-                "class": "SCHEMA_FAIL",
-                "details": {
-                  "code": "ERR_MANIFEST_INTEGRITY",
-                  "currentFingerprint": "<HASH>",
-                  "details": {
-                    "currentFingerprint": "<HASH>",
-                    "expectedFingerprint": "<HASH>"
-                  },
-                  "expectedFingerprint": "<HASH>",
-                  "integrityErrorCode": "ERR_MANIFEST_DRIFT",
-                  "manifestPath": "<PATH>",
-                  "message": "Manifest fingerprint does not match current app fingerprint (drift detected)."
-                },
-                "id": "manifest_integrity",
-                "ok": false,
-                "required": true
-              }
-            ],
-            "durationMs": 0,
-            "failureClass": "SCHEMA_FAIL",
-            "finishedAt": null,
-            "ok": false,
-            "startedAt": null,
-            "template": "node-express-api-sqlite"
-          }
-        },
-        "validateAfterHeal": null
-      },
-      {
-        "appPath": "<PATH>",
-        "ci": {
-          "hardFail": false,
-          "reason": "manifest_integrity",
-          "severity": "warn",
-          "warn": true
-        },
-        "ciAfterHeal": null,
-        "exitCode": 13,
-        "healedManifest": null,
-        "validate": {
-          "appPath": "<PATH>",
-          "didInstall": false,
-          "installMode": "always",
-          "manifestIntegrity": {
-            "currentFingerprint": "<HASH>",
-            "error": {
-              "code": "ERR_MANIFEST_DRIFT",
-              "details": {
-                "currentFingerprint": "<HASH>",
-                "expectedFingerprint": "<HASH>"
-              },
-              "message": "Manifest fingerprint does not match current app fingerprint (drift detected)."
-            },
-            "expectedFingerprint": "<HASH>",
-            "manifestPath": "<PATH>",
-            "ok": false
-          },
-          "ok": false,
-          "profile": "node-express-api-sqlite",
-          "template": "node-express-api-sqlite",
-          "validation": {
-            "appPath": "<PATH>",
-            "baseUrl": null,
-            "checks": [
-              {
-                "class": "SCHEMA_FAIL",
-                "details": {
-                  "code": "ERR_MANIFEST_INTEGRITY",
-                  "currentFingerprint": "<HASH>",
-                  "details": {
-                    "currentFingerprint": "<HASH>",
-                    "expectedFingerprint": "<HASH>"
-                  },
-                  "expectedFingerprint": "<HASH>",
-                  "integrityErrorCode": "ERR_MANIFEST_DRIFT",
-                  "manifestPath": "<PATH>",
-                  "message": "Manifest fingerprint does not match current app fingerprint (drift detected)."
-                },
-                "id": "manifest_integrity",
-                "ok": false,
-                "required": true
-              }
-            ],
-            "durationMs": 0,
-            "failureClass": "SCHEMA_FAIL",
-            "finishedAt": null,
-            "ok": false,
-            "startedAt": null,
-            "template": "node-express-api-sqlite"
-          }
-        },
-        "validateAfterHeal": null
-      },
-      {
-        "appPath": "<PATH>",
-        "ci": {
-          "hardFail": false,
-          "reason": "manifest_integrity",
-          "severity": "warn",
-          "warn": true
-        },
-        "ciAfterHeal": null,
-        "exitCode": 13,
-        "healedManifest": null,
-        "validate": {
-          "appPath": "<PATH>",
-          "didInstall": false,
-          "installMode": "always",
-          "manifestIntegrity": {
-            "currentFingerprint": "<HASH>",
-            "error": {
-              "code": "ERR_MANIFEST_DRIFT",
-              "details": {
-                "currentFingerprint": "<HASH>",
-                "expectedFingerprint": "<HASH>"
-              },
-              "message": "Manifest fingerprint does not match current app fingerprint (drift detected)."
-            },
-            "expectedFingerprint": "<HASH>",
-            "manifestPath": "<PATH>",
-            "ok": false
-          },
-          "ok": false,
-          "profile": "node-express-api-sqlite",
-          "template": "node-express-api-sqlite",
-          "validation": {
-            "appPath": "<PATH>",
-            "baseUrl": null,
-            "checks": [
-              {
-                "class": "SCHEMA_FAIL",
-                "details": {
-                  "code": "ERR_MANIFEST_INTEGRITY",
-                  "currentFingerprint": "<HASH>",
-                  "details": {
-                    "currentFingerprint": "<HASH>",
-                    "expectedFingerprint": "<HASH>"
-                  },
-                  "expectedFingerprint": "<HASH>",
-                  "integrityErrorCode": "ERR_MANIFEST_DRIFT",
-                  "manifestPath": "<PATH>",
-                  "message": "Manifest fingerprint does not match current app fingerprint (drift detected)."
-                },
-                "id": "manifest_integrity",
-                "ok": false,
-                "required": true
-              }
-            ],
-            "durationMs": 0,
-            "failureClass": "SCHEMA_FAIL",
-            "finishedAt": null,
-            "ok": false,
-            "startedAt": null,
-            "template": "node-express-api-sqlite"
+            "template": "fixture"
           }
         },
         "validateAfterHeal": null
@@ -731,6 +287,6 @@
     ],
     "rootPath": "<PATH>",
     "startedAt": null,
-    "warnCount": 11
+    "warnCount": 1
   }
 }
