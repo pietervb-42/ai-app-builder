@@ -31,8 +31,41 @@ async function fileSha256(p) {
   return sha256(buf);
 }
 
-async function listFilesRecursive(rootDir) {
+/**
+ * Extra exclusions that should NEVER affect drift fingerprint.
+ * Must match manifest layer behavior so drift and integrity agree.
+ */
+const DEFAULT_EXTRA_EXCLUDED_FILES = new Set([
+  "package-lock.json",
+  "npm-shrinkwrap.json",
+  "pnpm-lock.yaml",
+  "yarn.lock",
+  ".npmrc",
+  "npm-debug.log",
+  "yarn-error.log",
+  ".ds_store",
+  "thumbs.db",
+]);
+
+function toLowerSet(arr) {
+  const s = new Set();
+  for (const v of arr || []) {
+    const t = String(v ?? "").trim();
+    if (!t) continue;
+    s.add(t.toLowerCase());
+  }
+  return s;
+}
+
+function mergeSets(a, b) {
+  const out = new Set(a);
+  for (const v of b) out.add(v);
+  return out;
+}
+
+async function listFilesRecursive(rootDir, { excludedFiles } = {}) {
   const out = [];
+  const excluded = excludedFiles instanceof Set ? excludedFiles : new Set();
 
   async function walk(dir) {
     const entries = await fs.readdir(dir, { withFileTypes: true });
@@ -48,7 +81,13 @@ async function listFilesRecursive(rootDir) {
       }
 
       if (e.isFile()) {
+        // ignore.js rules (includes MANIFEST_NAME)
         if (shouldSkipFile(e.name)) continue;
+
+        // manifest-aligned extra exclusions (lockfiles/tool noise, etc.)
+        const lower = String(e.name).toLowerCase();
+        if (excluded.has(lower)) continue;
+
         out.push(abs);
       }
     }
@@ -58,8 +97,8 @@ async function listFilesRecursive(rootDir) {
   return out;
 }
 
-async function computeFileMap(appPathAbs) {
-  const files = await listFilesRecursive(appPathAbs);
+async function computeFileMap(appPathAbs, { excludedFiles } = {}) {
+  const files = await listFilesRecursive(appPathAbs, { excludedFiles });
   const map = {};
   for (const abs of files) {
     const rel = norm(path.relative(appPathAbs, abs));
@@ -204,7 +243,11 @@ export function unifiedDiff(oldText, newText, opts = {}) {
  * - If json=true:
  *    - stdout = one JSON object
  *    - stderr = optional logs only
- *    - NO human output, NO process.exit() side effects outside this function
+ *    - NO human output
+ *
+ * NOTE: exit codes are preserved for index.js behavior:
+ * - json errors => process.exit(1)
+ * - json success => process.exit(0)
  */
 export async function driftReport({
   appPath,
@@ -233,6 +276,18 @@ export async function driftReport({
   }
 
   const manifest = await readJson(manifestPath);
+
+  // Build excludedFiles set aligned to manifest behavior.
+  // Prefer manifest.ignoreRules.excludedFiles (if present), but always include defaults.
+  const manifestExcluded =
+    manifest && manifest.ignoreRules && Array.isArray(manifest.ignoreRules.excludedFiles)
+      ? manifest.ignoreRules.excludedFiles
+      : [];
+  const excludedFiles = mergeSets(
+    DEFAULT_EXTRA_EXCLUDED_FILES,
+    toLowerSet(manifestExcluded)
+  );
+
   const baseline = manifest.fileMap || null;
   if (!baseline) {
     const errObj = {
@@ -251,7 +306,7 @@ export async function driftReport({
     throw new Error(errObj.error.message);
   }
 
-  const current = await computeFileMap(appPathAbs);
+  const current = await computeFileMap(appPathAbs, { excludedFiles });
 
   const added = [];
   const removed = [];
