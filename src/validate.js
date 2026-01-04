@@ -112,6 +112,20 @@ async function getFreePort() {
   });
 }
 
+async function taskkillTree(pid) {
+  if (!pid || !Number.isFinite(Number(pid))) return;
+  if (process.platform !== "win32") return;
+
+  await new Promise((resolve) => {
+    const child = spawn("taskkill", ["/PID", String(pid), "/T", "/F"], {
+      windowsHide: true,
+      stdio: ["ignore", "ignore", "ignore"],
+    });
+    child.on("error", () => resolve());
+    child.on("close", () => resolve());
+  });
+}
+
 /**
  * spawnLogged routing rules (CI-safe):
  * - If opts.json === true:
@@ -150,6 +164,27 @@ function spawnLogged(cmd, args, opts = {}) {
     process.stderr.write(s);
   });
 
+  const killSoft = () => {
+    try {
+      child.kill();
+    } catch {}
+  };
+
+  const killHard = async () => {
+    try {
+      // Windows: kill the whole process tree to avoid orphaned node servers.
+      if (process.platform === "win32" && child.pid) {
+        await taskkillTree(child.pid);
+        return;
+      }
+    } catch {}
+
+    try {
+      // Non-Windows: best-effort hard kill.
+      child.kill("SIGKILL");
+    } catch {}
+  };
+
   return {
     child,
     wait: () =>
@@ -157,17 +192,8 @@ function spawnLogged(cmd, args, opts = {}) {
         child.on("error", reject);
         child.on("close", (code) => resolve({ code, stdout, stderr }));
       }),
-    kill: () => {
-      try {
-        child.kill();
-      } catch {}
-    },
-    killHard: () => {
-      try {
-        // Windows: Node maps this to TerminateProcess
-        child.kill("SIGKILL");
-      } catch {}
-    },
+    kill: killSoft,
+    killHard,
     isRunning: () => child.exitCode === null && !child.killed,
     capture: () => ({ stdout, stderr }),
   };
@@ -306,12 +332,16 @@ async function stopServer(server) {
   if (!server) return;
 
   // try graceful
-  server.kill();
+  try {
+    server.kill?.();
+  } catch {}
   await sleep(600);
 
   // hard stop if still running
   if (server.isRunning && server.isRunning()) {
-    server.killHard?.();
+    try {
+      await server.killHard?.();
+    } catch {}
     await sleep(300);
   }
 }
@@ -608,31 +638,72 @@ export async function validateAppCore({
     const env = { ...process.env, PORT: String(port) };
     const server = runNpm(["start"], { cwd: appAbs, env, quiet, json });
 
-    // health gate + early-exit detection
-    const health = await waitForServerReady({
-      server,
-      healthUrl,
-      timeoutMs: 15000,
-    });
+    // Always cleanup server (Windows needs tree kill to prevent orphans).
+    try {
+      // health gate + early-exit detection
+      const health = await waitForServerReady({
+        server,
+        healthUrl,
+        timeoutMs: 15000,
+      });
 
-    if (!health.ok) {
-      await stopServer(server);
+      if (!health.ok) {
+        // If npm start exited, classify as BOOT_FAIL, not HEALTH_FAIL.
+        if (health?.error?.code === "ERR_NPM_START_EXIT") {
+          if (attempt === attempts) {
+            const validation = makeValidationFailure({
+              template: templateName,
+              appPath: appAbs,
+              failureClass: classForBootstrapFailure("start"),
+              checkId: "start",
+              details: {
+                code: health.error.code,
+                message: health.error.message,
+                exitCode: health.error.exitCode ?? null,
+                stderrSnippet: health.error.stderrSnippet,
+                stdoutSnippet: health.error.stdoutSnippet,
+              },
+            });
 
-      // If npm start exited, classify as BOOT_FAIL, not HEALTH_FAIL.
-      if (health?.error?.code === "ERR_NPM_START_EXIT") {
+            const result = {
+              ok: false,
+              appPath: appAbs,
+              template: templateName,
+              profile: profileUsed,
+              installMode: effectiveInstallMode,
+              didInstall,
+              manifestIntegrity: {
+                ok: true,
+                manifestPath: integrity.manifestPath,
+                expectedFingerprint: integrity.expectedFingerprint,
+                currentFingerprint: integrity.currentFingerprint,
+                matches: true,
+              },
+              validation,
+            };
+
+            return {
+              result,
+              exitCode: exitCodeForFailureClass(validation.failureClass),
+            };
+          }
+          continue;
+        }
+
+        // Otherwise it's a HEALTH gate failure.
         if (attempt === attempts) {
+          const err = normalizeError(
+            health.error,
+            health?.error?.code || "ERR_HEALTH_GATE",
+            "Health gate failed."
+          );
+
           const validation = makeValidationFailure({
             template: templateName,
             appPath: appAbs,
-            failureClass: classForBootstrapFailure("start"),
-            checkId: "start",
-            details: {
-              code: health.error.code,
-              message: health.error.message,
-              exitCode: health.error.exitCode ?? null,
-              stderrSnippet: health.error.stderrSnippet,
-              stdoutSnippet: health.error.stdoutSnippet,
-            },
+            failureClass: ValidationClass.HEALTH_FAIL,
+            checkId: "health",
+            details: { code: err.code, message: err.message, url: healthUrl },
           });
 
           const result = {
@@ -660,100 +731,60 @@ export async function validateAppCore({
         continue;
       }
 
-      // Otherwise it's a HEALTH gate failure.
-      if (attempt === attempts) {
-        const err = normalizeError(
-          health.error,
-          health?.error?.code || "ERR_HEALTH_GATE",
-          "Health gate failed."
-        );
-
-        const validation = makeValidationFailure({
-          template: templateName,
+      // contract checks
+      let validation;
+      try {
+        validation = await runValidationContract({
+          template: profileUsed,
           appPath: appAbs,
-          failureClass: ValidationClass.HEALTH_FAIL,
-          checkId: "health",
-          details: { code: err.code, message: err.message, url: healthUrl },
+          baseUrl,
         });
 
-        const result = {
-          ok: false,
-          appPath: appAbs,
+        validation.templateOriginal = templateName;
+        validation.profileUsed = profileUsed;
+      } catch (e) {
+        const err = normalizeError(
+          e,
+          "ERR_CONTRACT_EXCEPTION",
+          "Validation contract runner threw an exception."
+        );
+
+        validation = makeValidationFailure({
           template: templateName,
-          profile: profileUsed,
-          installMode: effectiveInstallMode,
-          didInstall,
-          manifestIntegrity: {
-            ok: true,
-            manifestPath: integrity.manifestPath,
-            expectedFingerprint: integrity.expectedFingerprint,
-            currentFingerprint: integrity.currentFingerprint,
-            matches: true,
-          },
-          validation,
-        };
+          appPath: appAbs,
+          failureClass: classForBootstrapFailure("contract"),
+          checkId: "contract",
+          details: { code: err.code, message: err.message },
+        });
 
-        return {
-          result,
-          exitCode: exitCodeForFailureClass(validation.failureClass),
-        };
+        validation.templateOriginal = templateName;
+        validation.profileUsed = profileUsed;
       }
-      continue;
-    }
 
-    // contract checks
-    let validation;
-    try {
-      validation = await runValidationContract({
-        template: profileUsed,
-        appPath: appAbs,
+      const result = {
+        ok: validation.ok,
+        port,
+        url: healthUrl,
         baseUrl,
-      });
-
-      validation.templateOriginal = templateName;
-      validation.profileUsed = profileUsed;
-    } catch (e) {
-      const err = normalizeError(
-        e,
-        "ERR_CONTRACT_EXCEPTION",
-        "Validation contract runner threw an exception."
-      );
-
-      validation = makeValidationFailure({
+        response: health.json ?? { status: "ok" },
         template: templateName,
-        appPath: appAbs,
-        failureClass: classForBootstrapFailure("contract"),
-        checkId: "contract",
-        details: { code: err.code, message: err.message },
-      });
+        profile: profileUsed,
+        installMode: effectiveInstallMode,
+        didInstall,
+        manifestIntegrity: {
+          ok: true,
+          manifestPath: integrity.manifestPath,
+          expectedFingerprint: integrity.expectedFingerprint,
+          currentFingerprint: integrity.currentFingerprint,
+          matches: true,
+        },
+        validation,
+      };
 
-      validation.templateOriginal = templateName;
-      validation.profileUsed = profileUsed;
+      return { result, exitCode: exitCodeForFailureClass(validation.failureClass) };
+    } finally {
+      await stopServer(server);
     }
-
-    await stopServer(server);
-
-    const result = {
-      ok: validation.ok,
-      port,
-      url: healthUrl,
-      baseUrl,
-      response: health.json ?? { status: "ok" },
-      template: templateName,
-      profile: profileUsed,
-      installMode: effectiveInstallMode,
-      didInstall,
-      manifestIntegrity: {
-        ok: true,
-        manifestPath: integrity.manifestPath,
-        expectedFingerprint: integrity.expectedFingerprint,
-        currentFingerprint: integrity.currentFingerprint,
-        matches: true,
-      },
-      validation,
-    };
-
-    return { result, exitCode: exitCodeForFailureClass(validation.failureClass) };
   }
 
   const validation = makeValidationFailure({
