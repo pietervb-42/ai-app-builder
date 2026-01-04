@@ -632,7 +632,9 @@ export async function validateAppCore({
 
     // boot
     const port = await getFreePort();
-    const baseUrl = `http://localhost:${port}`;
+
+    // CRITICAL: Use IPv4 explicitly for deterministic ECONNREFUSED on Windows.
+    const baseUrl = `http://127.0.0.1:${port}`;
     const healthUrl = `${baseUrl}/health`;
 
     const env = { ...process.env, PORT: String(port) };
