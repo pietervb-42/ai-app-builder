@@ -1,4 +1,4 @@
-# =====================
+# ===================== 
 # Dependencies
 # =====================
 node_modules/
@@ -27,6 +27,7 @@ demo-app-2/
 # =====================
 ci/fixtures/diagnostics/build_out_not_empty/
 ci/fixtures/**/out/
+ci/fixtures/**/package-lock.json
 
 # =====================
 # Generated apps / DBs
