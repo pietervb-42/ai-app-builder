@@ -3,8 +3,8 @@
 ## Status
 
 - Total steps: 45
-- Completed: 43
-- Remaining: 2
+- Completed: 45
+- Remaining: 0
 - Current focus: Step 45
 
 ## Steps
@@ -51,8 +51,8 @@
 - [x] Step 38 — Release-ready CLI UX: help, examples, error codes catalog
 - [x] Step 39 — Template hardening: template contract + deterministic inventory
 - [x] Step 40 — Builder doctor command: environment + dependency diagnostics
-- [ ] Step 41 — App generation safety v2: stricter overwrite policy + guardrails
+- [x] Step 41 — App generation safety v2: stricter overwrite policy + guardrails
 - [x] Step 42 — Golden sample apps: curated fixtures under outputs/
 - [x] Step 43 — Documentation pack: README, workflows, CI usage
-- [ ] Step 44 — npm packaging: publishable CLI (bin), versioning discipline
+- [x] Step 44 — npm packaging: publishable CLI (bin), versioning discipline
 - [x] Step 45 — v1.0 cut: final CI gate + roadmap completion lock
