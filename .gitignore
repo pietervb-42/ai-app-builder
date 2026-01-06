@@ -14,6 +14,9 @@ node_modules/
 # AI App Builder outputs
 # =====================
 outputs/
+!outputs/golden/
+!outputs/golden/**
+
 output/
 reports/
 demo-app/
@@ -40,6 +43,7 @@ rollback_test.log
 Thumbs.db
 .vscode/*
 !.vscode/settings.json
+
 # =====================
 # AI internal memory (local-only)
 # =====================

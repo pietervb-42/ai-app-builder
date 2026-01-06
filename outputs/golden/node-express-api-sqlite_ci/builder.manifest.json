@@ -1,0 +1,32 @@
+{
+  "manifestSchemaVersion": 2,
+  "ignoreRules": {
+    "excludedDirs": [
+      "node_modules",
+      ".git",
+      ".builder_snapshots"
+    ],
+    "excludedFiles": [
+      "package-lock.json",
+      "npm-shrinkwrap.json",
+      "pnpm-lock.yaml",
+      "yarn.lock",
+      ".npmrc",
+      "npm-debug.log",
+      "yarn-error.log",
+      ".ds_store",
+      "thumbs.db"
+    ]
+  },
+  "template": "node-express-api-sqlite",
+  "templateDir": "C:\\Users\\piete\\ai-app-builder\\templates\\node-express-api-sqlite",
+  "fingerprint": "d737386ef3d3b499b630c402890f452141cdc0c746cc46dfe3ca4b3d8a8863bb",
+  "fileMap": {
+    "db/index.js": "075e1a9099405faf52b4ae741adb349420db5225e6e67ce2776d48218618320b",
+    "index.js": "16e3912bec1de24af2a6ca28738bf41b93d30291611f10dc59094466d6152d80",
+    "package.json": "a5efd8ae74a941e3329d430369b1f485d28b2307cd701cfcf70a705a61bc4b86",
+    "README.md": "c05074f90cd46f65a8296d387fe04f23dfe9f330c53c60a96aae248ea7560ea1",
+    "TEMPLATE.md": "3eb3219fe60879bd9b79e165d176c257627e16231e8ba37b97d0c9a6486875aa"
+  },
+  "lastManifestInitUtc": "2026-01-06T06:17:11.663Z"
+}
