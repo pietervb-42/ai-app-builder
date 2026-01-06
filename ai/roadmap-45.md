@@ -3,9 +3,9 @@
 ## Status
 
 - Total steps: 45
-- Completed: 42
-- Remaining: 3
-- Current focus: Step 44
+- Completed: 43
+- Remaining: 2
+- Current focus: Step 45
 
 ## Steps
 
@@ -55,4 +55,4 @@
 - [x] Step 42 — Golden sample apps: curated fixtures under outputs/
 - [x] Step 43 — Documentation pack: README, workflows, CI usage
 - [ ] Step 44 — npm packaging: publishable CLI (bin), versioning discipline
-- [ ] Step 45 — v1.0 cut: final CI gate + roadmap completion lock
+- [x] Step 45 — v1.0 cut: final CI gate + roadmap completion lock
