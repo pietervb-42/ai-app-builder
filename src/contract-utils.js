@@ -144,10 +144,6 @@ function deepCloneJson(x) {
 function normalizeConnRefusedMessage(s) {
   if (typeof s !== "string") return s;
   const t = s;
-  // Examples:
-  // "connect ECONNREFUSED 127.0.0.1:12345"
-  // "connect ECONNREFUSED ::1:12345"
-  // Some Node variants may include brackets in other contexts; we handle common forms.
   return t.replace(
     /\bconnect\s+ECONNREFUSED\s+(127\.0\.0\.1|localhost|\[::1\]|::1):(\d+)\b/gi,
     (_m, host) => `connect ECONNREFUSED ${host}:50745`
@@ -200,7 +196,7 @@ function normalizeInPlace(node) {
       continue;
     }
 
-    // Fingerprints/hashes drift with file ordering, line endings, environment, etc.
+    // Fingerprints/hashes drift.
     if (shouldNormalizeKeyAsFingerprintOrHash(key) && typeof val === "string") {
       node[key] = "<HASH>";
       continue;
@@ -396,7 +392,101 @@ function deepEqual(a, b) {
   return false;
 }
 
+function previewValue(v, maxLen = 180) {
+  try {
+    const s =
+      typeof v === "string"
+        ? v
+        : v === null
+        ? "null"
+        : typeof v === "number" || typeof v === "boolean"
+        ? String(v)
+        : JSON.stringify(v);
+    if (s.length <= maxLen) return s;
+    return s.slice(0, maxLen) + "…";
+  } catch {
+    return String(v);
+  }
+}
+
+function findFirstDiff(expected, actual, p = "$", depth = 0, maxDepth = 25) {
+  if (expected === actual) return null;
+
+  if (depth > maxDepth) {
+    return { path: p, expected: previewValue(expected), actual: previewValue(actual) };
+  }
+
+  if (typeof expected !== typeof actual) {
+    return {
+      path: p,
+      expected: `(${typeof expected}) ${previewValue(expected)}`,
+      actual: `(${typeof actual}) ${previewValue(actual)}`,
+    };
+  }
+
+  if (expected === null || actual === null) {
+    return { path: p, expected: previewValue(expected), actual: previewValue(actual) };
+  }
+
+  // Arrays
+  if (Array.isArray(expected) || Array.isArray(actual)) {
+    if (!Array.isArray(expected) || !Array.isArray(actual)) {
+      return { path: p, expected: previewValue(expected), actual: previewValue(actual) };
+    }
+    if (expected.length !== actual.length) {
+      return {
+        path: `${p}.length`,
+        expected: String(expected.length),
+        actual: String(actual.length),
+      };
+    }
+    for (let i = 0; i < expected.length; i++) {
+      const d = findFirstDiff(expected[i], actual[i], `${p}[${i}]`, depth + 1, maxDepth);
+      if (d) return d;
+    }
+    return null;
+  }
+
+  // Objects
+  if (isObject(expected) || isObject(actual)) {
+    if (!isObject(expected) || !isObject(actual)) {
+      return { path: p, expected: previewValue(expected), actual: previewValue(actual) };
+    }
+
+    const ek = Object.keys(expected).sort();
+    const ak = Object.keys(actual).sort();
+
+    if (ek.length !== ak.length) {
+      return {
+        path: `${p}.__keys__`,
+        expected: previewValue(ek),
+        actual: previewValue(ak),
+      };
+    }
+
+    for (let i = 0; i < ek.length; i++) {
+      if (ek[i] !== ak[i]) {
+        return {
+          path: `${p}.__keys__`,
+          expected: previewValue(ek),
+          actual: previewValue(ak),
+        };
+      }
+    }
+
+    for (const k of ek) {
+      const d = findFirstDiff(expected[k], actual[k], `${p}.${k}`, depth + 1, maxDepth);
+      if (d) return d;
+    }
+    return null;
+  }
+
+  // Primitives (string/number/boolean) differ
+  return { path: p, expected: previewValue(expected), actual: previewValue(actual) };
+}
+
 function diffSummary(a, b) {
+  const firstDiff = findFirstDiff(a, b);
   return {
     sameType: typeof a === typeof b,
     aIsArray: Array.isArray(a),
@@ -405,6 +495,7 @@ function diffSummary(a, b) {
     bKeys: isObject(b) ? Object.keys(b).length : null,
     aLen: Array.isArray(a) ? a.length : null,
     bLen: Array.isArray(b) ? b.length : null,
+    firstDiff: firstDiff || null,
   };
 }
 

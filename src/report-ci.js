@@ -27,6 +27,11 @@ import { createOutput } from "./output.js";
  *     2) re-run validate ONCE
  *     3) if it passes after healing: mark result as WARN (truthful heal)
  *   No healing is attempted for other failure types.
+ *
+ * STEP 44 (CI Reporting):
+ * - Include deterministic build safety signals in the JSON report so CI can
+ *   explicitly show build overwrite policy v2 is enforced.
+ * - This is reporting-only. We do not run build or read contract snapshots here.
  */
 
 function isDir(p) {
@@ -74,6 +79,46 @@ function discoverApps(rootPath) {
   // Deterministic order
   apps.sort((a, b) => a.localeCompare(b));
   return apps;
+}
+
+/**
+ * Deterministic build safety reporting signals (Step 44).
+ *
+ * Why static?
+ * - report:ci must remain deterministic and lightweight.
+ * - Enforcement is contract-locked in contract:run via fixtures:
+ *     - build@fixture:dry_run_ok (exit 0)
+ *     - build@fixture:out_not_empty (exit 1, ERR_OUT_NOT_EMPTY)
+ * - This section makes that enforcement visible in CI reports.
+ */
+function buildSafetySignals() {
+  return {
+    ok: true,
+    policyVersion: 2,
+    overwritePolicy: {
+      // Policy v2: if the output folder is not empty, overwrite is blocked (even if overwrite requested)
+      outNotEmptyBlocked: true,
+      errorCode: "ERR_OUT_NOT_EMPTY",
+      notes: [
+        "Overwrite policy v2 blocks writes when output directory is not empty.",
+        "Enforcement is validated via contract-locked build fixtures in contract:run.",
+      ],
+    },
+    enforcementEvidence: {
+      // These snapshot keys are contract-locked by contract:run.
+      contractLockedFixtures: [
+        {
+          snapshotKey: "build@fixture:dry_run_ok",
+          expected: { exitCode: 0, ok: true },
+        },
+        {
+          snapshotKey: "build@fixture:out_not_empty",
+          expected: { exitCode: 1, ok: false, errorCode: "ERR_OUT_NOT_EMPTY" },
+        },
+      ],
+      enforcementLocation: "contract:run",
+    },
+  };
 }
 
 /**
@@ -504,6 +549,9 @@ export async function reportCi(options = {}) {
     rootPath: path.resolve(rootPath),
     startedAt,
     finishedAt: new Date().toISOString(),
+
+    // Step 44: deterministic build safety reporting
+    buildSafety: buildSafetySignals(),
 
     appsDiscovered: discoveredApps.length,
     appsFound: apps.length,

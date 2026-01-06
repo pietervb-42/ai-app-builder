@@ -1,0 +1,197 @@
+{
+  "__contractCmd": "build@fixture:dry_run_ok",
+  "payload": {
+    "dryRun": true,
+    "installMode": "if-missing",
+    "notes": [
+      "Dry-run only: no files were written.",
+      "No generate/manifest/validate executed.",
+      "write-policy=merge-safe: outPath may be deterministically suffixed to avoid overwrites."
+    ],
+    "ok": true,
+    "outPath": "<PATH>",
+    "outPathAbs": "<PATH>",
+    "overwrite": false,
+    "plan": {
+      "assumptions": [
+        "You want a production-ready result with deterministic file writes and repeatable builds.",
+        "You want a CLI-driven workflow suitable for CI (JSON output, stable structure).",
+        "You want safe outputs: no destructive overwrites unless explicitly commanded elsewhere.",
+        "Backend will be an Express HTTP API with a /health endpoint.",
+        "Database will be SQLite for local-first deterministic storage."
+      ],
+      "decisions": [
+        {
+          "key": "determinism",
+          "value": "No timestamps/randomness in plans; stable step IDs and ordering."
+        },
+        {
+          "key": "writes",
+          "value": "Plan command writes only the plan output file (optional). No app generation."
+        },
+        {
+          "key": "cli",
+          "value": "All options provided via parseArgs() flags; no raw argv scanning in handlers."
+        },
+        {
+          "key": "output",
+          "value": "JSON structure is stable for CI consumption."
+        },
+        {
+          "key": "backend",
+          "value": "express"
+        },
+        {
+          "key": "frontend",
+          "value": "none"
+        },
+        {
+          "key": "database",
+          "value": "sqlite"
+        }
+      ],
+      "goal": "create an express api with sqlite users table",
+      "next": [
+        "If this plan looks right, run: node index.js templates:list",
+        "Then generate an app in outputs/ and validate it with validate / validate:all",
+        "Use drift:report and regen:* commands to keep outputs aligned with templates safely"
+      ],
+      "ok": true,
+      "risks": [
+        {
+          "id": "R1",
+          "mitigation": "Never add timestamps/randomness; keep stable ordering and step IDs.",
+          "risk": "Plan output becomes non-deterministic (timestamps, random IDs)."
+        },
+        {
+          "id": "R2",
+          "mitigation": "Use parseArgs() flags only; never use args.indexOf/argv scanning in handlers.",
+          "risk": "CLI handler re-parses argv directly and drifts from parseArgs()."
+        },
+        {
+          "id": "R3",
+          "mitigation": "PLAN command must only compute and optionally write the plan JSON file.",
+          "risk": "Plan implies file writes beyond --out."
+        }
+      ],
+      "steps": [
+        {
+          "acceptance": [
+            "Goal is restated clearly in one sentence.",
+            "Constraints include deterministic writes, CI-safe output, and no raw argv re-parsing."
+          ],
+          "commands": [],
+          "files": [
+            "README.md (update if needed)"
+          ],
+          "id": "S1",
+          "title": "Confirm goal and constraints"
+        },
+        {
+          "acceptance": [
+            "A single template is chosen (or a new template is specified).",
+            "Architecture includes backend/frontend/db responsibilities."
+          ],
+          "commands": [
+            "node index.js templates:list --json"
+          ],
+          "files": [
+            "templates/* (reference)",
+            "src/* (builder CLI)"
+          ],
+          "id": "S2",
+          "title": "Select template and architecture"
+        },
+        {
+          "acceptance": [
+            "Folder structure is listed (backend routes, db layer, optional frontend).",
+            "API contract includes /health and core endpoints."
+          ],
+          "commands": [],
+          "files": [
+            "outputs/<app>/ (generated app root)",
+            "outputs/<app>/package.json",
+            "outputs/<app>/src/*"
+          ],
+          "id": "S3",
+          "title": "Define folder structure and contracts"
+        },
+        {
+          "acceptance": [
+            "GET /health returns { status: 'ok' }.",
+            "Core routes return expected HTTP codes and JSON responses."
+          ],
+          "commands": [
+            "npm start"
+          ],
+          "files": [
+            "outputs/<app>/index.js or src/server.js",
+            "outputs/<app>/src/routes/*",
+            "outputs/<app>/src/middleware/*"
+          ],
+          "id": "S4",
+          "title": "Implement backend API skeleton (Express)"
+        },
+        {
+          "acceptance": [
+            "DB connection is created once and reused.",
+            "Schema exists (migrations or init script).",
+            "CRUD operations are covered by tests or validation checks."
+          ],
+          "commands": [],
+          "files": [
+            "outputs/<app>/src/db/*",
+            "outputs/<app>/src/models/*",
+            "outputs/<app>/data/app.sqlite (runtime-created)"
+          ],
+          "id": "S5",
+          "title": "Add SQLite data layer"
+        },
+        {
+          "acceptance": [
+            "API-only scope confirmed."
+          ],
+          "commands": [],
+          "files": [],
+          "id": "S6",
+          "title": "Skip frontend (API-only)"
+        },
+        {
+          "acceptance": [
+            "validate returns ok=true and stable JSON shape.",
+            "install-mode behavior is correct (always|never|if-missing)."
+          ],
+          "commands": [
+            "node index.js validate --app outputs/<app> --install-mode if-missing --json",
+            "node index.js validate:all --root outputs --install-mode if-missing --json"
+          ],
+          "files": [
+            "src/validate.js",
+            "src/validate-all.js",
+            "index.js"
+          ],
+          "id": "S7",
+          "title": "Add validation hooks and CI-friendly output"
+        },
+        {
+          "acceptance": [
+            "README contains: generate → validate → drift/regen workflow.",
+            "PLAN MODE documented with example output and flags."
+          ],
+          "commands": [],
+          "files": [
+            "README.md"
+          ],
+          "id": "S8",
+          "title": "Document usage and next automation steps"
+        }
+      ]
+    },
+    "stage": "dry-run",
+    "template": "node-express-api-sqlite",
+    "validation": null,
+    "willCreate": true,
+    "willInstallAssumingFresh": true,
+    "writePolicy": "merge-safe"
+  }
+}

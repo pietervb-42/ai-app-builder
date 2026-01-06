@@ -3,6 +3,38 @@
   "payload": {
     "appsDiscovered": 5,
     "appsFound": 5,
+    "buildSafety": {
+      "enforcementEvidence": {
+        "contractLockedFixtures": [
+          {
+            "expected": {
+              "exitCode": 0,
+              "ok": true
+            },
+            "snapshotKey": "build@fixture:dry_run_ok"
+          },
+          {
+            "expected": {
+              "errorCode": "ERR_OUT_NOT_EMPTY",
+              "exitCode": 1,
+              "ok": false
+            },
+            "snapshotKey": "build@fixture:out_not_empty"
+          }
+        ],
+        "enforcementLocation": "contract:run"
+      },
+      "ok": true,
+      "overwritePolicy": {
+        "errorCode": "ERR_OUT_NOT_EMPTY",
+        "notes": [
+          "Overwrite policy v2 blocks writes when output directory is not empty.",
+          "Enforcement is validated via contract-locked build fixtures in contract:run."
+        ],
+        "outNotEmptyBlocked": true
+      },
+      "policyVersion": 2
+    },
     "finishedAt": null,
     "hardFailCount": 4,
     "healManifest": false,

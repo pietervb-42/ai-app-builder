@@ -409,6 +409,37 @@ async function nodeModulesExists(appAbs) {
   }
 }
 
+/**
+ * If node_modules exists, it can still be BROKEN (partial install, deleted module, etc.).
+ * `npm ls` returns non-zero when dependencies are missing/invalid.
+ * We treat non-zero as "deps not healthy" => we should install when in if-missing mode.
+ */
+async function npmDepsHealthy(appAbs, { json = false } = {}) {
+  try {
+    const res = await runNpm(["ls", "--depth=0", "--json"], {
+      cwd: appAbs,
+      env: process.env,
+      quiet: true, // never spam output during health check
+      json: Boolean(json), // keep routing rules consistent even though quiet suppresses writes
+    }).wait();
+
+    return {
+      ok: res.code === 0,
+      exitCode: typeof res.code === "number" ? res.code : null,
+      stdoutSnippet: shortMessage(res.stdout ?? "", 200) || null,
+      stderrSnippet: shortMessage(res.stderr ?? "", 200) || null,
+    };
+  } catch (e) {
+    const err = normalizeError(e, "ERR_NPM_LS_EXCEPTION", "npm ls threw an exception.");
+    return {
+      ok: false,
+      exitCode: null,
+      stdoutSnippet: null,
+      stderrSnippet: err.message || null,
+    };
+  }
+}
+
 function classForBootstrapFailure(checkId) {
   // Deterministic mapping to existing classes (no UNKNOWN_FAIL).
   // These failures happen before contract checks, but must still be classified.
@@ -564,12 +595,22 @@ export async function validateAppCore({
     let didInstall = false;
 
     // install decision
-    const shouldInstall =
-      effectiveInstallMode === "always"
-        ? true
-        : effectiveInstallMode === "never"
-        ? false
-        : !(await nodeModulesExists(appAbs)); // if-missing
+    let shouldInstall = false;
+
+    if (effectiveInstallMode === "always") {
+      shouldInstall = true;
+    } else if (effectiveInstallMode === "never") {
+      shouldInstall = false;
+    } else {
+      // if-missing: install when node_modules missing OR deps are broken
+      const nmExists = await nodeModulesExists(appAbs);
+      if (!nmExists) {
+        shouldInstall = true;
+      } else {
+        const deps = await npmDepsHealthy(appAbs, { json });
+        shouldInstall = !deps.ok;
+      }
+    }
 
     // install (optional)
     if (shouldInstall) {

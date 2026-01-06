@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env node
+#!/usr/bin/env node
 import process from "process";
 import fs from "fs";
 import path from "path";
@@ -80,6 +80,9 @@ ai-app-builder CLI
 
 Commands:
   templates:list [--json]
+  templates:inventory [--json] [--quiet]
+
+  doctor [--json] [--quiet]
 
   plan --prompt "<text>" [--out <file>] [--json] [--quiet]
 
@@ -89,6 +92,7 @@ Commands:
   build --prompt "<text>" [--out <path>] [--template <name>]
         [--install-mode <always|never|if-missing>] [--dry-run]
         [--write-policy <refuse|merge-safe|overwrite>] [--yes]
+        [--overwrite]   (legacy alias for overwrite mode)
         [--json] [--quiet]
 
   validate --app <path> [--quiet] [--json] [--no-install]
@@ -113,7 +117,7 @@ Commands:
   regen:apply --app <path> --yes [--overwriteModified]
              [--write-policy <merge-safe|overwrite>] [--json] [--quiet]
 
-  schema:check --cmd <validate|validate:all|report:ci|manifest:refresh:all> (--file <path> | --stdin true)
+  schema:check --cmd <validate|validate:all|report:ci|manifest:refresh:all|templates:inventory|doctor> (--file <path> | --stdin true)
                [--json] [--quiet]
 
   contract:check --cmd <validate|validate:all|report:ci|manifest:refresh:all> (--file <path> | --stdin true)
@@ -183,6 +187,7 @@ function classifyCliError(err, cmd) {
 
   return {
     exitCode: 2,
+    stage: isUsage ? "input" : "runtime",
     errorCode: isUsage ? "ERR_INPUT" : "ERR_RUNTIME",
     message: msg,
   };
@@ -221,9 +226,6 @@ function discoverApps(rootPath, { include, max } = {}) {
 async function main() {
   const { cmd, flags } = parseArgs(process.argv);
 
-  // --ci is a supported alias/no-op flag:
-  // - Applies CI convenience defaults (json + quiet)
-  // - Then removed before dispatch so downstream modules can validate flags strictly
   const ciMode = Object.prototype.hasOwnProperty.call(flags, "ci") && hasFlag(flags, "ci");
 
   const jsonOnPipe = isTrueish(flags["json-on-pipe"]);
@@ -234,7 +236,6 @@ async function main() {
     flags.quiet = true;
   }
 
-  // Remove --ci so future strict flag validators in subcommands won't fail.
   if (Object.prototype.hasOwnProperty.call(flags, "ci")) {
     delete flags.ci;
   }
@@ -271,15 +272,21 @@ async function main() {
       return;
     }
 
-    
-
     if (cmd === "templates:inventory") {
       const mod = await import("./src/templates.js");
       const fn = pickExport(mod, ["templatesInventoryCommand"], "./src/templates.js");
       const exitCode = await fn({ flags });
       process.exit(typeof exitCode === "number" ? exitCode : 2);
     }
-if (cmd === "errors:list") {
+
+    if (cmd === "doctor") {
+      const mod = await import("./src/doctor.js");
+      const fn = pickExport(mod, ["doctorCommand"], "./src/doctor.js");
+      const exitCode = await fn({ flags });
+      process.exit(typeof exitCode === "number" ? exitCode : 2);
+    }
+
+    if (cmd === "errors:list") {
       const mod = await import("./src/errors.js");
       const fn = pickExport(mod, ["errorsListCommand"], "./src/errors.js");
       const exitCode = await fn({ flags });
@@ -569,7 +576,10 @@ if (cmd === "errors:list") {
 
       for (let i = 0; i < apps.length; i++) {
         const a = apps[i];
-        if (progress) process.stderr.write(`[manifest:refresh:all] ${i + 1}/${apps.length} ${a.relPath}\n`);
+        if (progress)
+          process.stderr.write(
+            `[manifest:refresh:all] ${i + 1}/${apps.length} ${a.relPath}\n`
+          );
         try {
           const r = await fn({ appPath: a.relPath, apply, templateDir });
           okCount++;
@@ -659,6 +669,7 @@ if (cmd === "errors:list") {
       process.stdout.write(
         JSON.stringify({
           ok: false,
+          stage: classified.stage,
           error: { code: classified.errorCode, message, cmd: cmd || null },
         }) + "\n"
       );
@@ -671,4 +682,3 @@ if (cmd === "errors:list") {
 }
 
 main();
-

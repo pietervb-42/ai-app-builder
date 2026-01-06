@@ -20,13 +20,15 @@
   },
   "template": "node-express-api-sqlite",
   "templateDir": "C:\\Users\\piete\\ai-app-builder\\templates\\node-express-api-sqlite",
-  "fingerprint": "d737386ef3d3b499b630c402890f452141cdc0c746cc46dfe3ca4b3d8a8863bb",
+  "fingerprint": "1e357eccf977a56a5d0c2ee4c1d50ff637f8e793b32118808f26b667a8806aee",
   "fileMap": {
+    "db/app.sqlite": "1aff2d0c2785b45fde7bb94bcdab15072097d1cfd541787eb4b130818563e190",
     "db/index.js": "075e1a9099405faf52b4ae741adb349420db5225e6e67ce2776d48218618320b",
     "index.js": "16e3912bec1de24af2a6ca28738bf41b93d30291611f10dc59094466d6152d80",
     "package.json": "a5efd8ae74a941e3329d430369b1f485d28b2307cd701cfcf70a705a61bc4b86",
     "README.md": "c05074f90cd46f65a8296d387fe04f23dfe9f330c53c60a96aae248ea7560ea1",
     "TEMPLATE.md": "3eb3219fe60879bd9b79e165d176c257627e16231e8ba37b97d0c9a6486875aa"
   },
-  "lastManifestInitUtc": "2026-01-06T06:17:09.129Z"
+  "lastManifestInitUtc": "2026-01-06T06:17:09.129Z",
+  "lastManifestRefreshUtc": "2026-01-06T06:25:47.247Z"
 }

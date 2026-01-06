@@ -325,6 +325,36 @@ export function checkTemplatesInventory(json) {
   return { ok: issues.length === 0, issues };
 }
 
+export function checkDoctor(json) {
+  const issues = [];
+  const p = "$";
+
+  if (!isObject(json)) return { ok: false, issues: [issue(p, "Expected object")] };
+
+  requireField(json, "ok", isBoolean, p, issues, "boolean");
+  requireField(json, "cmd", isString, p, issues, "string");
+  requireField(json, "checks", isArray, p, issues, "array");
+  requireField(json, "requiredFailCount", isNumber, p, issues, "number");
+  requireField(json, "optionalFailCount", isNumber, p, issues, "number");
+
+  if (isArray(json.checks)) {
+    for (let i = 0; i < json.checks.length; i++) {
+      const c = json.checks[i];
+      const cp = `${p}.checks[${i}]`;
+      if (!isObject(c)) {
+        issues.push(issue(cp, "Expected object"));
+        continue;
+      }
+      requireField(c, "id", isString, cp, issues, "string");
+      requireField(c, "required", isBoolean, cp, issues, "boolean");
+      requireField(c, "ok", isBoolean, cp, issues, "boolean");
+      requireField(c, "details", isObject, cp, issues, "object");
+    }
+  }
+
+  return { ok: issues.length === 0, issues };
+}
+
 /**
  * Registry: map "cmd name" => checker
  * We keep names aligned to CLI commands.
@@ -338,4 +368,5 @@ export const SCHEMA_CHECKERS = Object.freeze({
   "report:ci": checkReportCi,
   "manifest:refresh:all": checkManifestRefreshAll,
   "templates:inventory": checkTemplatesInventory,
+  doctor: checkDoctor,
 });

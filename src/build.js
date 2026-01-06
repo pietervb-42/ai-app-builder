@@ -1,6 +1,7 @@
 // src/build.js
 import fs from "fs";
 import path from "path";
+import os from "os";
 
 import { createPlan } from "./plan.js";
 import { resolveFromPlanObject } from "./plan-handoff.js";
@@ -8,25 +9,13 @@ import { generateApp } from "./generate.js";
 import { validateAppRun } from "./validate.js";
 
 /**
- * Step 15/16: build
+ * build
  *
  * node index.js build --prompt "<text>" [--out <path>] [--template <name>]
  *                     [--install-mode <always|never|if-missing>] [--dry-run]
+ *                     [--write-policy <refuse|merge-safe|overwrite>] [--yes]
+ *                     [--overwrite]  (legacy alias for overwrite mode)
  *                     [--json] [--quiet]
- *
- * Guarantees:
- * - build --json prints ONLY one JSON object line
- * - No overwrite of existing folders
- * - Deterministic suffixing if output exists
- *
- * Step 16: --dry-run
- * - PLAN + resolve template/outPath (+ suffix) only
- * - NO filesystem writes
- * - NO generate / manifest / validate
- *
- * Step 17: Absolute Path Normalisation (metadata only)
- * - Add outPathAbs alongside outPath in build + dry-run output
- * - No behavior changes
  */
 
 function safeString(x) {
@@ -40,30 +29,35 @@ function normalizeInstallMode(x) {
   return "__invalid__";
 }
 
+function isTrueish(v) {
+  if (v === true) return true;
+  if (v === false || v == null) return false;
+  const s = String(v).toLowerCase().trim();
+  return s === "true" || s === "1" || s === "yes" || s === "y" || s === "on";
+}
+
+function normalizeWritePolicy(x) {
+  const v = safeString(x).trim().toLowerCase();
+  if (!v) return "__unset__";
+  if (v === "refuse" || v === "merge-safe" || v === "overwrite") return v;
+  return "__invalid__";
+}
+
 function fail(stage, code, message, extra = {}) {
   return {
     ok: false,
-    stage,
+    stage: safeString(stage),
     error: {
       code: safeString(code),
       message: safeString(message),
       ...extra,
     },
+    validation: null,
   };
 }
 
-/**
- * Deterministically find the first available folder:
- *   path
- *   path_2
- *   path_3
- *   ...
- *
- * Note: uses fs.existsSync only; no writes.
- */
 function resolveUniqueOutPath(basePath) {
   if (!fs.existsSync(basePath)) return basePath;
-
   let i = 2;
   while (true) {
     const candidate = `${basePath}_${i}`;
@@ -72,20 +66,134 @@ function resolveUniqueOutPath(basePath) {
   }
 }
 
-/**
- * Step 17 helper: deterministic absolute path for an outPath.
- * - Works for relative and absolute inputs
- * - Uses process.cwd() as the anchor (stable within a run)
- * - No filesystem access
- */
 function toAbsOutPath(outPath) {
   return path.resolve(process.cwd(), safeString(outPath));
 }
 
-/**
- * Mute ALL output during pipeline when --json is enabled.
- * This guarantees build --json emits only the final JSON line.
- */
+function listDirEntriesSafe(dirAbs) {
+  try {
+    if (!fs.existsSync(dirAbs)) return { ok: true, entries: [] };
+    const st = fs.statSync(dirAbs);
+    if (!st.isDirectory())
+      return { ok: false, entries: [], error: "not_a_directory" };
+    const entries = fs.readdirSync(dirAbs);
+    return { ok: true, entries };
+  } catch (e) {
+    return { ok: false, entries: [], error: String(e?.message ?? e) };
+  }
+}
+
+function isRootPath(p) {
+  const abs = path.resolve(p);
+  const root = path.parse(abs).root;
+  return abs === root;
+}
+
+function samePath(a, b) {
+  const aa = path.resolve(a);
+  const bb = path.resolve(b);
+  if (process.platform === "win32") return aa.toLowerCase() === bb.toLowerCase();
+  return aa === bb;
+}
+
+function hasDotGit(dirAbs) {
+  try {
+    const gitAbs = path.join(dirAbs, ".git");
+    return fs.existsSync(gitAbs);
+  } catch {
+    return false;
+  }
+}
+
+function computeWillInstallAssumingFresh({ installMode }) {
+  if (installMode === "always") return true;
+  if (installMode === "never") return false;
+  return true;
+}
+
+function checkProtectedOutPath(outAbs) {
+  const repoRootAbs = path.resolve(process.cwd());
+  const homeAbs = path.resolve(os.homedir());
+
+  if (samePath(outAbs, repoRootAbs)) {
+    return {
+      ok: false,
+      code: "ERR_OUT_PROTECTED_PATH",
+      message: "Refusing to write into the repo root as an output directory.",
+      details: { path: outAbs, reason: "repo_root", repoRootAbs },
+    };
+  }
+
+  if (isRootPath(outAbs)) {
+    return {
+      ok: false,
+      code: "ERR_OUT_PROTECTED_PATH",
+      message: "Refusing to use a filesystem root as an output directory.",
+      details: { path: outAbs, reason: "filesystem_root" },
+    };
+  }
+
+  if (samePath(outAbs, homeAbs)) {
+    return {
+      ok: false,
+      code: "ERR_OUT_PROTECTED_PATH",
+      message: "Refusing to use the user home folder as an output directory.",
+      details: { path: outAbs, reason: "home_root", homeAbs },
+    };
+  }
+
+  if (fs.existsSync(outAbs) && hasDotGit(outAbs)) {
+    return {
+      ok: false,
+      code: "ERR_OUT_PROTECTED_PATH",
+      message: "Refusing to write into a folder containing .git.",
+      details: { path: outAbs, reason: "contains_dot_git" },
+    };
+  }
+
+  return { ok: true };
+}
+
+function checkOutNotEmpty(outAbs) {
+  if (!fs.existsSync(outAbs)) {
+    return { ok: true, exists: false, empty: true, entries: [] };
+  }
+
+  const st = fs.statSync(outAbs);
+  if (!st.isDirectory()) {
+    return {
+      ok: false,
+      code: "ERR_OUT_NOT_DIRECTORY",
+      message: "Output path exists but is not a directory.",
+      details: { path: outAbs },
+    };
+  }
+
+  const ls = listDirEntriesSafe(outAbs);
+  if (!ls.ok) {
+    return {
+      ok: false,
+      code: "ERR_OUT_READ_FAILED",
+      message: "Could not read output directory to determine safety.",
+      details: { path: outAbs, reason: ls.error },
+    };
+  }
+
+  const entries = ls.entries || [];
+  const empty = entries.length === 0;
+
+  if (!empty) {
+    return {
+      ok: false,
+      code: "ERR_OUT_NOT_EMPTY",
+      message: "Refusing to use non-empty output directory.",
+      details: { path: outAbs, blockingEntries: entries.slice().sort() },
+    };
+  }
+
+  return { ok: true, exists: true, empty: true, entries };
+}
+
 async function withMutedOutput(enabled, fn) {
   if (!enabled) return await fn();
 
@@ -123,15 +231,6 @@ async function withMutedOutput(enabled, fn) {
   }
 }
 
-function computeWillInstallAssumingFresh({ installMode }) {
-  // In a dry-run (no app generated yet), we cannot inspect node_modules.
-  // Deterministic assumption: fresh output -> node_modules missing.
-  if (installMode === "always") return true;
-  if (installMode === "never") return false;
-  // if-missing + fresh output => install would happen
-  return true;
-}
-
 export async function buildCommand({ flags }) {
   const prompt = safeString(flags.prompt).trim();
   const out = flags.out;
@@ -141,145 +240,217 @@ export async function buildCommand({ flags }) {
   const quiet = !!flags.quiet;
   const dryRun = !!flags["dry-run"] || !!flags.dryRun;
 
-  const installMode = normalizeInstallMode(
-    flags["install-mode"] ?? flags.installMode
-  );
+  const installMode = normalizeInstallMode(flags["install-mode"] ?? flags.installMode);
+
+  const writePolicyRaw = flags["write-policy"] ?? flags.writePolicy;
+  const writePolicyNorm = normalizeWritePolicy(writePolicyRaw);
+
+  const legacyOverwrite = !!flags.overwrite;
+  const yes = isTrueish(flags.yes);
 
   if (!prompt) {
-    const result = fail("input", "ERR_MISSING_PROMPT", "Missing --prompt value.");
-    process.stdout.write(JSON.stringify(result) + "\n");
+    process.stdout.write(JSON.stringify(fail("input", "ERR_MISSING_PROMPT", "Missing --prompt value.")) + "\n");
     return 1;
   }
 
   if (installMode === "__invalid__") {
-    const result = fail(
-      "input",
-      "ERR_BAD_INSTALL_MODE",
-      "Invalid --install-mode. Use always|never|if-missing.",
-      { provided: safeString(flags["install-mode"] ?? flags.installMode) }
+    process.stdout.write(
+      JSON.stringify(
+        fail("input", "ERR_BAD_INSTALL_MODE", "Invalid --install-mode. Use always|never|if-missing.", {
+          provided: safeString(flags["install-mode"] ?? flags.installMode),
+        })
+      ) + "\n"
     );
-    process.stdout.write(JSON.stringify(result) + "\n");
     return 1;
   }
 
-  // 1) PLAN (no I/O)
+  if (writePolicyNorm === "__invalid__") {
+    process.stdout.write(
+      JSON.stringify(
+        fail("input", "ERR_BAD_WRITE_POLICY", "Invalid --write-policy. Use refuse|merge-safe|overwrite.", {
+          provided: safeString(writePolicyRaw),
+        })
+      ) + "\n"
+    );
+    return 1;
+  }
+
+  const effectiveWritePolicy = legacyOverwrite
+    ? "overwrite"
+    : writePolicyNorm !== "__unset__"
+      ? writePolicyNorm
+      : "merge-safe";
+
+  if (effectiveWritePolicy === "overwrite" && !yes) {
+    process.stdout.write(
+      JSON.stringify(
+        fail(
+          "input",
+          "ERR_CONFIRM_REQUIRED",
+          "Refusing overwrite mode without explicit confirmation. Re-run with --yes.",
+          { details: { writePolicy: effectiveWritePolicy, requiredFlag: "--yes" } }
+        )
+      ) + "\n"
+    );
+    return 1;
+  }
+
   const plan = createPlan(prompt);
   if (!plan?.ok) {
-    const result = fail("plan", "ERR_PLAN_FAILED", "PLAN did not return ok:true.", {
-      plan,
-    });
-    process.stdout.write(JSON.stringify(result) + "\n");
+    process.stdout.write(JSON.stringify(fail("plan", "ERR_PLAN_FAILED", "PLAN did not return ok:true.", { plan })) + "\n");
     return 1;
   }
 
-  // 2) Resolve template + base outPath (Step 14 rules)
-  const resolved = resolveFromPlanObject(plan, {
-    out,
-    templateOverride,
-  });
-
+  const resolved = resolveFromPlanObject(plan, { out, templateOverride });
   if (!resolved?.ok) {
-    const result = fail(
-      "handoff",
-      resolved?.error?.code || "ERR_HANDOFF_FAILED",
-      resolved?.error?.message || "PLAN → GENERATE handshake failed.",
-      { details: resolved?.error }
+    process.stdout.write(
+      JSON.stringify(
+        fail(
+          "handoff",
+          resolved?.error?.code || "ERR_HANDOFF_FAILED",
+          resolved?.error?.message || "PLAN → GENERATE handshake failed.",
+          { details: resolved?.error }
+        )
+      ) + "\n"
     );
-    process.stdout.write(JSON.stringify(result) + "\n");
     return 1;
   }
 
   const template = resolved.template;
   const baseOutPath = resolved.outPath;
 
-  // Deterministic safe output selection (no overwrite)
-  const outPath = resolveUniqueOutPath(baseOutPath);
-  const outPathAbs = toAbsOutPath(outPath);
-  const willCreate = !fs.existsSync(outPath);
+  const shouldSuffix = effectiveWritePolicy === "merge-safe" && !legacyOverwrite;
+  const outPath = shouldSuffix ? resolveUniqueOutPath(baseOutPath) : baseOutPath;
+  const overwrite = effectiveWritePolicy === "overwrite";
 
-  // Step 16: DRY RUN (no writes, no validate)
+  const outPathAbs = toAbsOutPath(outPath);
+  const willCreate = !fs.existsSync(outPathAbs);
+
+  const protectedCheck = checkProtectedOutPath(outPathAbs);
+  if (!protectedCheck.ok) {
+    process.stdout.write(
+      JSON.stringify(
+        fail("output", protectedCheck.code, protectedCheck.message, {
+          details: protectedCheck.details,
+          template,
+          outPath,
+          outPathAbs,
+          overwrite,
+          writePolicy: effectiveWritePolicy,
+        })
+      ) + "\n"
+    );
+    return 1;
+  }
+
+  // IMPORTANT: refuse + overwrite require an EMPTY existing directory.
+  // merge-safe avoids collisions by suffixing output path; it may write into a new dir.
+  const mustBeEmptyIfExists = effectiveWritePolicy === "refuse" || effectiveWritePolicy === "overwrite";
+  if (mustBeEmptyIfExists) {
+    const emptyCheck = checkOutNotEmpty(outPathAbs);
+    if (!emptyCheck.ok) {
+      process.stdout.write(
+        JSON.stringify(
+          fail("output", emptyCheck.code, emptyCheck.message, {
+            details: emptyCheck.details,
+            template,
+            outPath,
+            outPathAbs,
+            overwrite,
+            writePolicy: effectiveWritePolicy,
+          })
+        ) + "\n"
+      );
+      return 1;
+    }
+  }
+
   if (dryRun) {
-    const result = {
+    const payload = {
       ok: true,
+      stage: "dry-run",
       dryRun: true,
       plan,
       template,
       outPath,
-      outPathAbs, // Step 17 metadata
+      outPathAbs,
       willCreate,
       installMode,
       willInstallAssumingFresh: computeWillInstallAssumingFresh({ installMode }),
+      overwrite,
+      writePolicy: effectiveWritePolicy,
       notes: [
         "Dry-run only: no files were written.",
         "No generate/manifest/validate executed.",
-        "outPath includes deterministic suffixing to avoid overwrites.",
+        effectiveWritePolicy === "refuse"
+          ? "write-policy=refuse: outPath is not suffixed; non-empty outputs are refused."
+          : effectiveWritePolicy === "overwrite"
+            ? "write-policy=overwrite: outPath is not suffixed; requires --yes; non-empty outputs are refused (no deletion)."
+            : "write-policy=merge-safe: outPath may be deterministically suffixed to avoid overwrites.",
       ],
+      validation: null,
     };
-
-    // Always write single JSON line for CI stability
-    process.stdout.write(JSON.stringify(result) + "\n");
+    process.stdout.write(JSON.stringify(payload) + "\n");
     return 0;
   }
 
-  // Step 15 pipeline: generate + validate
   let validationResult = null;
   let valExit = 1;
-  let generatedAbs = null;
-
-  const pipeline = async () => {
-    generatedAbs = await generateApp({
-      template,
-      outPath,
-    });
-
-    const { result, exitCode } = await validateAppRun({
-      appPath: generatedAbs,
-      installMode,
-      quiet: true,
-    });
-
-    validationResult = result;
-    valExit = exitCode;
-  };
 
   try {
-    // mute internal logs in --json mode so we output only final JSON
-    await withMutedOutput(json === true, pipeline);
-  } catch (e) {
-    const result = {
-      ok: false,
-      stage: "generate",
-      plan,
-      template,
-      outPath,
-      outPathAbs, // Step 17 metadata (still useful on failure)
-      error: {
-        code: "ERR_BUILD_FAILED",
-        message: String(e?.message ?? e),
-      },
-      validation: validationResult,
-    };
+    await withMutedOutput(json === true, async () => {
+      const generatedAbs = await generateApp({ template, outPath, overwrite });
 
-    process.stdout.write(JSON.stringify(result) + "\n");
+      const { result, exitCode } = await validateAppRun({
+        appPath: generatedAbs,
+        installMode,
+        quiet: true,
+      });
+
+      validationResult = result;
+      valExit = exitCode;
+    });
+  } catch (e) {
+    const errCode = safeString(e?.code || "ERR_BUILD_FAILED");
+    const errDetails = e?.details && typeof e.details === "object" ? e.details : undefined;
+
+    process.stdout.write(
+      JSON.stringify({
+        ok: false,
+        stage: "generate",
+        plan,
+        template,
+        outPath,
+        outPathAbs,
+        overwrite,
+        writePolicy: effectiveWritePolicy,
+        error: {
+          code: errCode,
+          message: String(e?.message ?? e),
+          ...(errDetails ? { details: errDetails } : {}),
+        },
+        validation: validationResult,
+      }) + "\n"
+    );
     return 1;
   }
 
   const final = {
     ok: valExit === 0,
+    stage: "validate",
     plan,
     template,
     outPath,
-    outPathAbs, // Step 17 metadata
+    outPathAbs,
+    overwrite,
+    writePolicy: effectiveWritePolicy,
     validation: validationResult,
   };
 
   process.stdout.write(JSON.stringify(final) + "\n");
 
   if (!json && !quiet) {
-    // Optional human hint to stderr (doesn't break JSON redirection)
-    process.stderr.write(
-      final.ok ? `[build] OK -> ${outPath}\n` : `[build] FAIL -> ${outPath}\n`
-    );
+    process.stderr.write(final.ok ? `[build] OK -> ${outPath}\n` : `[build] FAIL -> ${outPath}\n`);
   }
 
   return final.ok ? 0 : 1;
