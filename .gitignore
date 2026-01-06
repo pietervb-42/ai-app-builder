@@ -17,35 +17,19 @@ outputs/
 !outputs/golden/
 !outputs/golden/**
 
-# BUT: never commit dependencies / locks / local runtime artifacts inside golden apps
-outputs/golden/**/node_modules/
-outputs/golden/**/package-lock.json
-outputs/golden/**/npm-shrinkwrap.json
-outputs/golden/**/pnpm-lock.yaml
-outputs/golden/**/yarn.lock
-outputs/golden/**/.npmrc
-outputs/golden/**/npm-debug.log
-outputs/golden/**/yarn-error.log
-outputs/golden/**/db/
-outputs/golden/**/.builder_snapshots/
-
 output/
 reports/
 demo-app/
 demo-app-2/
 
 # =====================
-# CI fixtures / contracts
+# CI fixture runtime outputs
 # =====================
-# Keep fixtures, but never commit lockfiles that appear from running npm in fixtures
-ci/fixtures/**/package-lock.json
-ci/fixtures/**/npm-shrinkwrap.json
-ci/fixtures/**/pnpm-lock.yaml
-ci/fixtures/**/yarn.lock
-ci/fixtures/**/node_modules/
+ci/fixtures/diagnostics/build_out_not_empty/
+ci/fixtures/**/out/
 
 # =====================
-# Generated apps / DBs (legacy paths)
+# Generated apps / DBs
 # =====================
 user-api-v1/db/
 user-api-v1/node_modules/
@@ -62,10 +46,7 @@ rollback_test.log
 # OS / Editor junk
 # =====================
 .DS_Store
-**/.DS_Store
 Thumbs.db
-._*
-._*/
 .vscode/*
 !.vscode/settings.json
 
@@ -73,8 +54,4 @@ Thumbs.db
 # AI internal memory (local-only)
 # =====================
 ai/*.md
-!ai/roadmap-45.md
-!ai/project-memory.md
-
-# (legacy) keep this ignored
 output/plan.md
