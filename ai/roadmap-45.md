@@ -3,9 +3,9 @@
 ## Status
 
 - Total steps: 45
-- Completed: 40
-- Remaining: 5
-- Current focus: Step 41
+- Completed: 42
+- Remaining: 3
+- Current focus: Step 44
 
 ## Steps
 
@@ -52,7 +52,7 @@
 - [x] Step 39 — Template hardening: template contract + deterministic inventory
 - [x] Step 40 — Builder doctor command: environment + dependency diagnostics
 - [ ] Step 41 — App generation safety v2: stricter overwrite policy + guardrails
-- [ ] Step 42 — Golden sample apps: curated fixtures under outputs/
-- [ ] Step 43 — Documentation pack: README, workflows, CI usage
+- [x] Step 42 — Golden sample apps: curated fixtures under outputs/
+- [x] Step 43 — Documentation pack: README, workflows, CI usage
 - [ ] Step 44 — npm packaging: publishable CLI (bin), versioning discipline
 - [ ] Step 45 — v1.0 cut: final CI gate + roadmap completion lock
